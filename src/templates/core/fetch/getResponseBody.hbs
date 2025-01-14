@@ -7,6 +7,8 @@ export const getResponseBody = async (response: Response): Promise<any> => {
 				const isJSON = jsonTypes.some(type => contentType.toLowerCase().startsWith(type));
 				if (isJSON) {
 					return await response.json();
+				} else if (contentType.includes('application/pdf')) {
+					return await response.blob();
 				} else {
 					return await response.text();
 				}

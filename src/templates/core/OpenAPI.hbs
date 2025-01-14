@@ -15,7 +15,7 @@ export type OpenAPIConfig = {
 	PASSWORD?: string | Resolver<string> | undefined;
 	HEADERS?: Headers | Resolver<Headers> | undefined;
 	ENCODE_PATH?: ((path: string) => string) | undefined;
-	CACHE_OPTIONS?: Map<string, any> | undefined;
+	CACHE_OPTIONS?: Record<string, any> | undefined;
 };
 
 export const OpenAPI: OpenAPIConfig = {

@@ -5,6 +5,12 @@ import type { ApiRequestOptions } from './ApiRequestOptions';
 type Resolver<T> = (options: ApiRequestOptions) => Promise<T>;
 type Headers = Record<string, string>;
 
+export type ApiCacheOptions = {
+	enabled: boolean;
+	ttl?: number;
+	key?: string;
+};
+
 export type OpenAPIConfig = {
 	BASE: string;
 	VERSION: string;
@@ -15,7 +21,7 @@ export type OpenAPIConfig = {
 	PASSWORD?: string | Resolver<string> | undefined;
 	HEADERS?: Headers | Resolver<Headers> | undefined;
 	ENCODE_PATH?: ((path: string) => string) | undefined;
-	CACHE_OPTIONS?: Record<string, any> | undefined;
+	CACHE_OPTIONS?: ApiCacheOptions | undefined;
 };
 
 export const OpenAPI: OpenAPIConfig = {

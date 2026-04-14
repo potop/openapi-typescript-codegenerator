@@ -79,10 +79,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
 			let cacheKey: string | undefined;
 			if (isCacheEnabled && cacheProvider) {
 				cacheKey = config.CACHE_OPTIONS?.key ?? JSON.stringify(options);
-				const cachedResult = await cacheProvider.getItem(cacheKey);
-				if (cachedResult) {
-					resolve(JSON.parse(cachedResult));
-					return;
+				try {
+					const cachedResult = await cacheProvider.getItem(cacheKey);
+					if (cachedResult) {
+						resolve(JSON.parse(cachedResult));
+						return;
+					}
+				} catch (cacheReadError) {
+					config.ON_CACHE_ERROR?.('getItem', cacheReadError, cacheKey);
 				}
 			}
 
@@ -108,7 +112,11 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
 				catchErrorCodes(options, result);
 
 				if (isCacheEnabled && cacheKey && cacheProvider) {
-					await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
+					try {
+						await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
+					} catch (cacheWriteError) {
+						config.ON_CACHE_ERROR?.('setItem', cacheWriteError, cacheKey);
+					}
 				}
 
 				if (isSmartDownload) {

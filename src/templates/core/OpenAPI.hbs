@@ -19,6 +19,8 @@ export interface CacheProvider {
 	destroy?(opts?: { clearData?: boolean }): void;
 }
 
+export type CacheErrorOperation = 'getItem' | 'setItem';
+
 export type OpenAPIConfig = {
 	BASE: string;
 	VERSION: string;
@@ -31,6 +33,7 @@ export type OpenAPIConfig = {
 	ENCODE_PATH?: ((path: string) => string) | undefined;
 	CACHE_OPTIONS?: ApiCacheOptions | undefined;
 	CACHE_PROVIDER?: CacheProvider | undefined;
+	ON_CACHE_ERROR?: ((operation: CacheErrorOperation, error: unknown, cacheKey: string) => void) | undefined;
 	SMART_DOWNLOAD?: boolean | undefined;
 	REDIRECT?: RequestRedirect | undefined;
 	ON_OPAQUE_REDIRECT?: ((response: Response) => void) | undefined;
@@ -48,6 +51,7 @@ export const OpenAPI: OpenAPIConfig = {
 	ENCODE_PATH: undefined,
 	CACHE_OPTIONS: undefined,
 	CACHE_PROVIDER: undefined,
+	ON_CACHE_ERROR: undefined,
 	SMART_DOWNLOAD: false,
 	REDIRECT: undefined,
 	ON_OPAQUE_REDIRECT: undefined,

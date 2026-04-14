@@ -374,6 +374,8 @@ export interface CacheProvider {
     destroy?(opts?: { clearData?: boolean }): void;
 }
 
+export type CacheErrorOperation = 'getItem' | 'setItem';
+
 export type OpenAPIConfig = {
     BASE: string;
     VERSION: string;
@@ -386,6 +388,7 @@ export type OpenAPIConfig = {
     ENCODE_PATH?: ((path: string) => string) | undefined;
     CACHE_OPTIONS?: ApiCacheOptions | undefined;
     CACHE_PROVIDER?: CacheProvider | undefined;
+    ON_CACHE_ERROR?: ((operation: CacheErrorOperation, error: unknown, cacheKey: string) => void) | undefined;
     SMART_DOWNLOAD?: boolean | undefined;
     REDIRECT?: RequestRedirect | undefined;
     ON_OPAQUE_REDIRECT?: ((response: Response) => void) | undefined;
@@ -403,6 +406,7 @@ export const OpenAPI: OpenAPIConfig = {
     ENCODE_PATH: undefined,
     CACHE_OPTIONS: undefined,
     CACHE_PROVIDER: undefined,
+    ON_CACHE_ERROR: undefined,
     SMART_DOWNLOAD: false,
     REDIRECT: undefined,
     ON_OPAQUE_REDIRECT: undefined,
@@ -826,10 +830,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
             let cacheKey: string | undefined;
             if (isCacheEnabled && cacheProvider) {
                 cacheKey = config.CACHE_OPTIONS?.key ?? JSON.stringify(options);
-                const cachedResult = await cacheProvider.getItem(cacheKey);
-                if (cachedResult) {
-                    resolve(JSON.parse(cachedResult));
-                    return;
+                try {
+                    const cachedResult = await cacheProvider.getItem(cacheKey);
+                    if (cachedResult) {
+                        resolve(JSON.parse(cachedResult));
+                        return;
+                    }
+                } catch (cacheReadError) {
+                    config.ON_CACHE_ERROR?.('getItem', cacheReadError, cacheKey);
                 }
             }
 
@@ -855,7 +863,11 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
                 catchErrorCodes(options, result);
 
                 if (isCacheEnabled && cacheKey && cacheProvider) {
-                    await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
+                    try {
+                        await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
+                    } catch (cacheWriteError) {
+                        config.ON_CACHE_ERROR?.('setItem', cacheWriteError, cacheKey);
+                    }
                 }
 
                 if (isSmartDownload) {
@@ -5076,6 +5088,8 @@ export interface CacheProvider {
     destroy?(opts?: { clearData?: boolean }): void;
 }
 
+export type CacheErrorOperation = 'getItem' | 'setItem';
+
 export type OpenAPIConfig = {
     BASE: string;
     VERSION: string;
@@ -5088,6 +5102,7 @@ export type OpenAPIConfig = {
     ENCODE_PATH?: ((path: string) => string) | undefined;
     CACHE_OPTIONS?: ApiCacheOptions | undefined;
     CACHE_PROVIDER?: CacheProvider | undefined;
+    ON_CACHE_ERROR?: ((operation: CacheErrorOperation, error: unknown, cacheKey: string) => void) | undefined;
     SMART_DOWNLOAD?: boolean | undefined;
     REDIRECT?: RequestRedirect | undefined;
     ON_OPAQUE_REDIRECT?: ((response: Response) => void) | undefined;
@@ -5105,6 +5120,7 @@ export const OpenAPI: OpenAPIConfig = {
     ENCODE_PATH: undefined,
     CACHE_OPTIONS: undefined,
     CACHE_PROVIDER: undefined,
+    ON_CACHE_ERROR: undefined,
     SMART_DOWNLOAD: false,
     REDIRECT: undefined,
     ON_OPAQUE_REDIRECT: undefined,
@@ -5528,10 +5544,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
             let cacheKey: string | undefined;
             if (isCacheEnabled && cacheProvider) {
                 cacheKey = config.CACHE_OPTIONS?.key ?? JSON.stringify(options);
-                const cachedResult = await cacheProvider.getItem(cacheKey);
-                if (cachedResult) {
-                    resolve(JSON.parse(cachedResult));
-                    return;
+                try {
+                    const cachedResult = await cacheProvider.getItem(cacheKey);
+                    if (cachedResult) {
+                        resolve(JSON.parse(cachedResult));
+                        return;
+                    }
+                } catch (cacheReadError) {
+                    config.ON_CACHE_ERROR?.('getItem', cacheReadError, cacheKey);
                 }
             }
 
@@ -5557,7 +5577,11 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
                 catchErrorCodes(options, result);
 
                 if (isCacheEnabled && cacheKey && cacheProvider) {
-                    await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
+                    try {
+                        await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
+                    } catch (cacheWriteError) {
+                        config.ON_CACHE_ERROR?.('setItem', cacheWriteError, cacheKey);
+                    }
                 }
 
                 if (isSmartDownload) {
@@ -8529,6 +8553,8 @@ export interface CacheProvider {
     destroy?(opts?: { clearData?: boolean }): void;
 }
 
+export type CacheErrorOperation = 'getItem' | 'setItem';
+
 export type OpenAPIConfig = {
     BASE: string;
     VERSION: string;
@@ -8541,6 +8567,7 @@ export type OpenAPIConfig = {
     ENCODE_PATH?: ((path: string) => string) | undefined;
     CACHE_OPTIONS?: ApiCacheOptions | undefined;
     CACHE_PROVIDER?: CacheProvider | undefined;
+    ON_CACHE_ERROR?: ((operation: CacheErrorOperation, error: unknown, cacheKey: string) => void) | undefined;
     SMART_DOWNLOAD?: boolean | undefined;
     REDIRECT?: RequestRedirect | undefined;
     ON_OPAQUE_REDIRECT?: ((response: Response) => void) | undefined;
@@ -8558,6 +8585,7 @@ export const OpenAPI: OpenAPIConfig = {
     ENCODE_PATH: undefined,
     CACHE_OPTIONS: undefined,
     CACHE_PROVIDER: undefined,
+    ON_CACHE_ERROR: undefined,
     SMART_DOWNLOAD: false,
     REDIRECT: undefined,
     ON_OPAQUE_REDIRECT: undefined,
@@ -8981,10 +9009,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
             let cacheKey: string | undefined;
             if (isCacheEnabled && cacheProvider) {
                 cacheKey = config.CACHE_OPTIONS?.key ?? JSON.stringify(options);
-                const cachedResult = await cacheProvider.getItem(cacheKey);
-                if (cachedResult) {
-                    resolve(JSON.parse(cachedResult));
-                    return;
+                try {
+                    const cachedResult = await cacheProvider.getItem(cacheKey);
+                    if (cachedResult) {
+                        resolve(JSON.parse(cachedResult));
+                        return;
+                    }
+                } catch (cacheReadError) {
+                    config.ON_CACHE_ERROR?.('getItem', cacheReadError, cacheKey);
                 }
             }
 
@@ -9010,7 +9042,11 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
                 catchErrorCodes(options, result);
 
                 if (isCacheEnabled && cacheKey && cacheProvider) {
-                    await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
+                    try {
+                        await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
+                    } catch (cacheWriteError) {
+                        config.ON_CACHE_ERROR?.('setItem', cacheWriteError, cacheKey);
+                    }
                 }
 
                 if (isSmartDownload) {

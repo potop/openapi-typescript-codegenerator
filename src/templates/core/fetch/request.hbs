@@ -52,6 +52,15 @@ import type { OpenAPIConfig } from './OpenAPI';
 {{>fetch/getResponseBody}}
 
 
+{{>fetch/getContentDispositionFilename}}
+
+
+{{>fetch/downloadBlob}}
+
+
+{{>fetch/handleFileDownload}}
+
+
 {{>functions/catchErrorCodes}}
 
 
@@ -65,14 +74,27 @@ import type { OpenAPIConfig } from './OpenAPI';
 export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): CancelablePromise<T> => {
 	return new CancelablePromise(async (resolve, reject, onCancel) => {
 		try {
+			const cacheProvider = config.CACHE_PROVIDER;
+			const isCacheEnabled = Boolean(config.CACHE_OPTIONS?.enabled && cacheProvider);
+			let cacheKey: string | undefined;
+			if (isCacheEnabled && cacheProvider) {
+				cacheKey = config.CACHE_OPTIONS?.key ?? JSON.stringify(options);
+				const cachedResult = await cacheProvider.getItem(cacheKey);
+				if (cachedResult) {
+					resolve(JSON.parse(cachedResult));
+					return;
+				}
+			}
+
 			const url = getUrl(config, options);
 			const formData = getFormData(options);
 			const body = getRequestBody(options);
 			const headers = await getHeaders(config, options);
 
 			if (!onCancel.isCancelled) {
+				const isSmartDownload = Boolean(config.SMART_DOWNLOAD);
 				const response = await sendRequest(config, options, url, body, formData, headers, onCancel);
-				const responseBody = await getResponseBody(response);
+				const responseBody = await getResponseBody(response, config, isSmartDownload);
 				const responseHeader = getResponseHeader(response, options.responseHeader);
 
 				const result: ApiResult = {
@@ -84,6 +106,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
 				};
 
 				catchErrorCodes(options, result);
+
+				if (isCacheEnabled && cacheKey && cacheProvider) {
+					await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
+				}
+
+				if (isSmartDownload) {
+					handleFileDownload(response, responseBody);
+				}
 
 				resolve(result.body);
 			}

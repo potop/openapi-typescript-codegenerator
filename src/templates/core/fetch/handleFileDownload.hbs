@@ -1,0 +1,38 @@
+/**
+ * Picks the MIME type to stamp on the saved `Blob`.
+ *
+ * Mirrors the server's `Content-Type` in most cases. Maps JSON-ish content
+ * types to `application/octet-stream` so the browser doesn't try to preview
+ * the downloaded file as JSON — when we force a download, we want the user
+ * to get a saveable binary, not a pretty-printed browser tab.
+ */
+const getDownloadContentType = (response: Response): string => {
+	const contentType = response.headers.get('content-type');
+	if (isJsonContentType(contentType)) {
+		return 'application/octet-stream';
+	}
+	return contentType || 'application/octet-stream';
+};
+
+/**
+ * Conditionally triggers a browser download for a response body.
+ *
+ * Only acts when the response carries `Content-Disposition: attachment` — this
+ * is the server's explicit opt-in signal that the body is a file the user
+ * should save. For any other response (no header, `inline` disposition) this
+ * is a silent no-op, so callers can safely invoke it on every `SMART_DOWNLOAD`
+ * request without worrying about spurious downloads.
+ *
+ * Filename comes from the `Content-Disposition` header (see
+ * `getContentDispositionFilename`); the blob is stamped with a download-safe
+ * content type (see `getDownloadContentType`) and handed to `downloadBlob`.
+ */
+const handleFileDownload = (response: Response, responseBody: any): void => {
+	const contentDisposition = response.headers.get('content-disposition');
+	if (!contentDisposition || !contentDisposition.includes('attachment')) {
+		return;
+	}
+	const filename = getContentDispositionFilename(contentDisposition);
+	const blob = new Blob([responseBody], { type: getDownloadContentType(response) });
+	downloadBlob(blob, filename);
+};

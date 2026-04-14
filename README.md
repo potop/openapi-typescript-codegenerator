@@ -36,6 +36,51 @@ sure to migrate your projects: https://heyapi.dev/openapi-ts/migrating.html#open
 - Supports aborting of requests (cancelable promise pattern)
 - Supports external references using [json-schema-ref-parser](https://github.com/APIDevTools/json-schema-ref-parser/)
 
+## Fork divergence
+
+This is a maintained fork of [`openapi-typescript-codegen`](https://github.com/ferdikoomen/openapi-typescript-codegen). All core behavior is preserved; the differences below are additive and only affect the **`fetch`** client. Other clients (`axios`, `xhr`, `node`, `angular`) are unchanged from upstream.
+
+The additions cover three cross-cutting concerns that consumers otherwise need to bolt on via post-generation hand-edits: response caching, opt-in file downloads, and session-expiry detection.
+
+### Extended `OpenAPIConfig` fields
+
+All new fields are optional and default to `undefined`/`false`, so a consumer that sets nothing gets vanilla upstream behavior.
+
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `CACHE_OPTIONS` | `{ enabled: boolean; ttl?: number; key?: string; featureToggled?: boolean }` | Per-call caching policy. Passed via `configOverrides` on a service method: `Service.get(id, { CACHE_OPTIONS: { enabled: true, key: 'foo' } })`. If `enabled` is true **and** `CACHE_PROVIDER` is configured, the request is served from cache on hit and stored on miss. |
+| `CACHE_PROVIDER` | `CacheProvider` (structural: `getItem`, `setItem`, optional `removeItem` / `destroy`) | Pluggable cache backend. The generator ships **no** implementation — wire in your own (IndexedDB, `localStorage`, in-memory Map, etc.) at init time: `OpenAPI.CACHE_PROVIDER = myCache;`. Cache keys default to `JSON.stringify(options)` unless `CACHE_OPTIONS.key` is set. |
+| `SMART_DOWNLOAD` | `boolean` | Two effects when `true`: (1) the response is parsed as text even under a JSON content-type (useful for endpoints that return raw YAML/XML with the wrong `Content-Type`), and (2) if the response carries `Content-Disposition: attachment`, a browser "Save file" dialog is triggered automatically. Non-attachment responses flow through unchanged. |
+| `REDIRECT` | `RequestRedirect` (`'follow'` \| `'error'` \| `'manual'`) | Forwarded to `fetch`'s `RequestInit.redirect`. Default is the browser's native default (`'follow'`). Set to `'manual'` if you want to observe session-expiry redirects via `ON_OPAQUE_REDIRECT`. |
+| `ON_OPAQUE_REDIRECT` | `(response: Response) => void` | Invoked when `fetch` returns a response with `type === 'opaqueredirect'` (only possible when `REDIRECT: 'manual'` is set). Typical use: clear the cache, show a "session expired" modal, redirect to login. |
+
+### Built-in file-download behavior
+
+When `SMART_DOWNLOAD: true`, the generated `request.ts` includes three internal helpers that implement the download pipeline — **no consumer code or hooks required**:
+
+- `handleFileDownload` — bails out unless `Content-Disposition: attachment` is present; silent no-op otherwise.
+- `getContentDispositionFilename` — parses the header. Handles RFC 5987 `filename*=UTF-8''...`, quoted `filename="..."`, and bare `filename=...`. Falls back to `'download'`. For exotic cases (non-UTF-8 extended params, multi-line continuations) swap for the `content-disposition` npm package.
+- `downloadBlob` — standard synthetic-anchor + `URL.createObjectURL` + click + revoke routine. Browser-only.
+
+### Example consumer wiring
+
+```ts
+import { OpenAPI } from './generated/open-api';
+import { MyCache } from './my-cache';
+
+OpenAPI.BASE = '/api';
+OpenAPI.CACHE_PROVIDER = new MyCache();
+OpenAPI.REDIRECT = 'manual';
+OpenAPI.ON_OPAQUE_REDIRECT = () => {
+    OpenAPI.CACHE_PROVIDER?.destroy?.({ clearData: true });
+    showSessionExpiredModal();
+};
+
+// Per-call usage:
+await MyService.getThing(id, { CACHE_OPTIONS: { enabled: true, key: `thing:${id}` } });
+await MyService.exportCsv({ SMART_DOWNLOAD: true });
+```
+
 ## Install
 
 ```

@@ -16,6 +16,10 @@ export const sendRequest = async (
 		signal: controller.signal,
 	};
 
+	if (config.REDIRECT) {
+		request.redirect = config.REDIRECT;
+	}
+
 	if (config.WITH_CREDENTIALS) {
 		request.credentials = config.CREDENTIALS;
 	}

@@ -1,0 +1,20 @@
+/**
+ * Triggers a browser "Save file" dialog for the given `Blob` under `filename`.
+ *
+ * Uses the standard synthetic-anchor pattern: create an `<a>` pointing at an
+ * object URL, append it to the DOM (required by some browsers for `.click()`
+ * to take effect), click it, then tear it down and revoke the object URL to
+ * release the underlying blob reference.
+ *
+ * Browser-only — relies on `document` and `URL.createObjectURL`. Not usable in
+ * Node/SSR contexts.
+ */
+const downloadBlob = (blob: Blob, filename: string): void => {
+	const link = document.createElement('a');
+	link.href = URL.createObjectURL(blob);
+	link.download = filename;
+	document.body.appendChild(link);
+	link.click();
+	document.body.removeChild(link);
+	URL.revokeObjectURL(link.href);
+};

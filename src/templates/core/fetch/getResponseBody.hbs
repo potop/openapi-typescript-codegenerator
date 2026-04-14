@@ -1,11 +1,24 @@
-export const getResponseBody = async (response: Response): Promise<any> => {
-	if (response.status !== 204) {
+const isJsonContentType = (contentType: string | null): boolean => {
+	if (!contentType) return false;
+	const jsonTypes = ['application/json', 'application/problem+json'];
+	return jsonTypes.some(type => contentType.toLowerCase().startsWith(type));
+};
+
+export const getResponseBody = async (
+	response: Response,
+	config: OpenAPIConfig,
+	isSmartDownload?: boolean,
+): Promise<any> => {
+	if (response.type === 'opaqueredirect') {
+		config.ON_OPAQUE_REDIRECT?.(response);
+		return undefined;
+	}
+	if (response.status !== 204 && response.status !== 302) {
 		try {
 			const contentType = response.headers.get('Content-Type');
 			if (contentType) {
-				const jsonTypes = ['application/json', 'application/problem+json']
-				const isJSON = jsonTypes.some(type => contentType.toLowerCase().startsWith(type));
-				if (isJSON) {
+				const isJSON = isJsonContentType(contentType);
+				if (isJSON && !isSmartDownload) {
 					return await response.json();
 				} else if (contentType.includes('application/pdf')) {
 					return await response.blob();

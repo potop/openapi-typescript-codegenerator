@@ -19,10 +19,13 @@ import axiosRequest from '../templates/core/axios/request.hbs';
 import axiosSendRequest from '../templates/core/axios/sendRequest.hbs';
 import templateCoreBaseHttpRequest from '../templates/core/BaseHttpRequest.hbs';
 import templateCancelablePromise from '../templates/core/CancelablePromise.hbs';
+import fetchDownloadBlob from '../templates/core/fetch/downloadBlob.hbs';
+import fetchGetContentDispositionFilename from '../templates/core/fetch/getContentDispositionFilename.hbs';
 import fetchGetHeaders from '../templates/core/fetch/getHeaders.hbs';
 import fetchGetRequestBody from '../templates/core/fetch/getRequestBody.hbs';
 import fetchGetResponseBody from '../templates/core/fetch/getResponseBody.hbs';
 import fetchGetResponseHeader from '../templates/core/fetch/getResponseHeader.hbs';
+import fetchHandleFileDownload from '../templates/core/fetch/handleFileDownload.hbs';
 import fetchRequest from '../templates/core/fetch/request.hbs';
 import fetchSendRequest from '../templates/core/fetch/sendRequest.hbs';
 import functionBase64 from '../templates/core/functions/base64.hbs';
@@ -186,6 +189,9 @@ export const registerHandlebarTemplates = (root: {
     Handlebars.registerPartial('fetch/getResponseBody', Handlebars.template(fetchGetResponseBody));
     Handlebars.registerPartial('fetch/getResponseHeader', Handlebars.template(fetchGetResponseHeader));
     Handlebars.registerPartial('fetch/sendRequest', Handlebars.template(fetchSendRequest));
+    Handlebars.registerPartial('fetch/getContentDispositionFilename', Handlebars.template(fetchGetContentDispositionFilename));
+    Handlebars.registerPartial('fetch/downloadBlob', Handlebars.template(fetchDownloadBlob));
+    Handlebars.registerPartial('fetch/handleFileDownload', Handlebars.template(fetchHandleFileDownload));
     Handlebars.registerPartial('fetch/request', Handlebars.template(fetchRequest));
 
     // Specific files for the xhr client implementation

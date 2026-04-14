@@ -12,6 +12,13 @@ export type ApiCacheOptions = {
 	featureToggled?: boolean;
 };
 
+export interface CacheProvider {
+	getItem(key: string): Promise<string | null | undefined>;
+	setItem(key: string, value: string): Promise<void>;
+	removeItem?(key: string): Promise<void> | void;
+	destroy?(opts?: { clearData?: boolean }): void;
+}
+
 export type OpenAPIConfig = {
 	BASE: string;
 	VERSION: string;
@@ -23,6 +30,10 @@ export type OpenAPIConfig = {
 	HEADERS?: Headers | Resolver<Headers> | undefined;
 	ENCODE_PATH?: ((path: string) => string) | undefined;
 	CACHE_OPTIONS?: ApiCacheOptions | undefined;
+	CACHE_PROVIDER?: CacheProvider | undefined;
+	SMART_DOWNLOAD?: boolean | undefined;
+	REDIRECT?: RequestRedirect | undefined;
+	ON_OPAQUE_REDIRECT?: ((response: Response) => void) | undefined;
 };
 
 export const OpenAPI: OpenAPIConfig = {
@@ -36,4 +47,8 @@ export const OpenAPI: OpenAPIConfig = {
 	HEADERS: undefined,
 	ENCODE_PATH: undefined,
 	CACHE_OPTIONS: undefined,
+	CACHE_PROVIDER: undefined,
+	SMART_DOWNLOAD: false,
+	REDIRECT: undefined,
+	ON_OPAQUE_REDIRECT: undefined,
 };

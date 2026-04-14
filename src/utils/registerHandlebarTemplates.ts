@@ -189,7 +189,10 @@ export const registerHandlebarTemplates = (root: {
     Handlebars.registerPartial('fetch/getResponseBody', Handlebars.template(fetchGetResponseBody));
     Handlebars.registerPartial('fetch/getResponseHeader', Handlebars.template(fetchGetResponseHeader));
     Handlebars.registerPartial('fetch/sendRequest', Handlebars.template(fetchSendRequest));
-    Handlebars.registerPartial('fetch/getContentDispositionFilename', Handlebars.template(fetchGetContentDispositionFilename));
+    Handlebars.registerPartial(
+        'fetch/getContentDispositionFilename',
+        Handlebars.template(fetchGetContentDispositionFilename)
+    );
     Handlebars.registerPartial('fetch/downloadBlob', Handlebars.template(fetchDownloadBlob));
     Handlebars.registerPartial('fetch/handleFileDownload', Handlebars.template(fetchHandleFileDownload));
     Handlebars.registerPartial('fetch/request', Handlebars.template(fetchRequest));

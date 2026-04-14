@@ -1,6 +1,6 @@
 {
     "name": "openapi-typescript-codegenerator",
-    "version": "0.30.3",
+    "version": "0.31.0",
     "description": "Library that generates Typescript clients based on the OpenAPI specification.",
     "author": "Ferdi Koomen",
     "homepage": "https://github.com/potop/openapi-typescript-codegenerator",

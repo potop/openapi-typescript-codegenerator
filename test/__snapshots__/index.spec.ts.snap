@@ -1,7 +1,7 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`client should generate: test/generated/client/ApiClient.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -93,7 +93,7 @@ export class ApiClient {
 `;
 
 exports[`client should generate: test/generated/client/core/ApiError.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -122,7 +122,7 @@ export class ApiError extends Error {
 `;
 
 exports[`client should generate: test/generated/client/core/ApiRequestOptions.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -143,7 +143,7 @@ export type ApiRequestOptions = {
 `;
 
 exports[`client should generate: test/generated/client/core/ApiResult.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -158,7 +158,7 @@ export type ApiResult = {
 `;
 
 exports[`client should generate: test/generated/client/core/BaseHttpRequest.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -179,7 +179,7 @@ export abstract class BaseHttpRequest {
 `;
 
 exports[`client should generate: test/generated/client/core/CancelablePromise.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -266,9 +266,9 @@ export class CancelablePromise<T> implements Promise<T> {
         });
     }
 
-     get [Symbol.toStringTag]() {
-            return "Cancellable Promise";
-     }
+    get [Symbol.toStringTag]() {
+        return "Cancellable Promise";
+    }
 
     public then<TResult1 = T, TResult2 = never>(
         onFulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
@@ -314,7 +314,7 @@ export class CancelablePromise<T> implements Promise<T> {
 `;
 
 exports[`client should generate: test/generated/client/core/FetchHttpRequest.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -351,7 +351,7 @@ export class FetchHttpRequest extends BaseHttpRequest {
 `;
 
 exports[`client should generate: test/generated/client/core/OpenAPI.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -359,6 +359,20 @@ import type { ApiRequestOptions } from './ApiRequestOptions';
 
 type Resolver<T> = (options: ApiRequestOptions) => Promise<T>;
 type Headers = Record<string, string>;
+
+export type ApiCacheOptions = {
+    enabled: boolean;
+    ttl?: number;
+    key?: string;
+    featureToggled?: boolean;
+};
+
+export interface CacheProvider {
+    getItem(key: string): Promise<string | null | undefined>;
+    setItem(key: string, value: string): Promise<void>;
+    removeItem?(key: string): Promise<void> | void;
+    destroy?(opts?: { clearData?: boolean }): void;
+}
 
 export type OpenAPIConfig = {
     BASE: string;
@@ -370,6 +384,11 @@ export type OpenAPIConfig = {
     PASSWORD?: string | Resolver<string> | undefined;
     HEADERS?: Headers | Resolver<Headers> | undefined;
     ENCODE_PATH?: ((path: string) => string) | undefined;
+    CACHE_OPTIONS?: ApiCacheOptions | undefined;
+    CACHE_PROVIDER?: CacheProvider | undefined;
+    SMART_DOWNLOAD?: boolean | undefined;
+    REDIRECT?: RequestRedirect | undefined;
+    ON_OPAQUE_REDIRECT?: ((response: Response) => void) | undefined;
 };
 
 export const OpenAPI: OpenAPIConfig = {
@@ -382,12 +401,17 @@ export const OpenAPI: OpenAPIConfig = {
     PASSWORD: undefined,
     HEADERS: undefined,
     ENCODE_PATH: undefined,
+    CACHE_OPTIONS: undefined,
+    CACHE_PROVIDER: undefined,
+    SMART_DOWNLOAD: false,
+    REDIRECT: undefined,
+    ON_OPAQUE_REDIRECT: undefined,
 };
 "
 `;
 
 exports[`client should generate: test/generated/client/core/request.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -526,10 +550,12 @@ export const resolve = async <T>(options: ApiRequestOptions, resolver?: T | Reso
 };
 
 export const getHeaders = async (config: OpenAPIConfig, options: ApiRequestOptions): Promise<Headers> => {
-    const token = await resolve(options, config.TOKEN);
-    const username = await resolve(options, config.USERNAME);
-    const password = await resolve(options, config.PASSWORD);
-    const additionalHeaders = await resolve(options, config.HEADERS);
+    const [token, username, password, additionalHeaders] = await Promise.all([
+        resolve(options, config.TOKEN),
+        resolve(options, config.USERNAME),
+        resolve(options, config.PASSWORD),
+        resolve(options, config.HEADERS),
+    ]);
 
     const headers = Object.entries({
         Accept: 'application/json',
@@ -551,7 +577,7 @@ export const getHeaders = async (config: OpenAPIConfig, options: ApiRequestOptio
         headers['Authorization'] = \`Basic \${credentials}\`;
     }
 
-    if (options.body) {
+    if (options.body !== undefined) {
         if (options.mediaType) {
             headers['Content-Type'] = options.mediaType;
         } else if (isBlob(options.body)) {
@@ -597,6 +623,10 @@ export const sendRequest = async (
         signal: controller.signal,
     };
 
+    if (config.REDIRECT) {
+        request.redirect = config.REDIRECT;
+    }
+
     if (config.WITH_CREDENTIALS) {
         request.credentials = config.CREDENTIALS;
     }
@@ -616,15 +646,30 @@ export const getResponseHeader = (response: Response, responseHeader?: string): 
     return undefined;
 };
 
-export const getResponseBody = async (response: Response): Promise<any> => {
-    if (response.status !== 204) {
+const isJsonContentType = (contentType: string | null): boolean => {
+    if (!contentType) return false;
+    const jsonTypes = ['application/json', 'application/problem+json'];
+    return jsonTypes.some(type => contentType.toLowerCase().startsWith(type));
+};
+
+export const getResponseBody = async (
+    response: Response,
+    config: OpenAPIConfig,
+    isSmartDownload?: boolean,
+): Promise<any> => {
+    if (response.type === 'opaqueredirect') {
+        config.ON_OPAQUE_REDIRECT?.(response);
+        return undefined;
+    }
+    if (response.status !== 204 && response.status !== 302) {
         try {
             const contentType = response.headers.get('Content-Type');
             if (contentType) {
-                const jsonTypes = ['application/json', 'application/problem+json']
-                const isJSON = jsonTypes.some(type => contentType.toLowerCase().startsWith(type));
-                if (isJSON) {
+                const isJSON = isJsonContentType(contentType);
+                if (isJSON && !isSmartDownload) {
                     return await response.json();
+                } else if (contentType.includes('application/pdf')) {
+                    return await response.blob();
                 } else {
                     return await response.text();
                 }
@@ -634,6 +679,102 @@ export const getResponseBody = async (response: Response): Promise<any> => {
         }
     }
     return undefined;
+};
+
+/**
+ * Extracts a filename from an HTTP \`Content-Disposition\` header value.
+ *
+ * Handles these forms, in order of preference:
+ *   1. \`filename*=UTF-8''<percent-encoded>\` — RFC 5987/8187 extended parameter
+ *      (only the UTF-8 charset is recognized; other charsets fall through).
+ *   2. \`filename="..."\` — quoted form (RFC 6266).
+ *   3. \`filename=...\`   — bare token form (RFC 6266).
+ *
+ * Returns \`'download'\` as a last-resort fallback when the header is missing
+ * or none of the patterns match. Non-UTF-8 extended params, multi-line
+ * continuations, and other exotic RFC 6266 edge cases are intentionally not
+ * handled — if that becomes necessary, swap this helper for the npm
+ * \`content-disposition\` package.
+ */
+const getContentDispositionFilename = (contentDisposition: string | null): string => {
+    if (!contentDisposition) return 'download';
+    const utf8Match = contentDisposition.match(/filename\\*=UTF-8''([^;]+)/i);
+    if (utf8Match?.[1]) {
+        try {
+            return decodeURIComponent(utf8Match[1]);
+        } catch {
+            /* fall through */
+        }
+    }
+    const quotedMatch = contentDisposition.match(/filename="([^"]+)"/i);
+    if (quotedMatch?.[1]) {
+        return quotedMatch[1];
+    }
+    const bareMatch = contentDisposition.match(/filename=([^;]+)/i);
+    if (bareMatch?.[1]) {
+        return bareMatch[1].trim();
+    }
+    return 'download';
+};
+
+/**
+ * Triggers a browser "Save file" dialog for the given \`Blob\` under \`filename\`.
+ *
+ * Uses the standard synthetic-anchor pattern: create an \`<a>\` pointing at an
+ * object URL, append it to the DOM (required by some browsers for \`.click()\`
+ * to take effect), click it, then tear it down and revoke the object URL to
+ * release the underlying blob reference.
+ *
+ * Browser-only — relies on \`document\` and \`URL.createObjectURL\`. Not usable in
+ * Node/SSR contexts.
+ */
+const downloadBlob = (blob: Blob, filename: string): void => {
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+};
+
+/**
+ * Picks the MIME type to stamp on the saved \`Blob\`.
+ *
+ * Mirrors the server's \`Content-Type\` in most cases. Maps JSON-ish content
+ * types to \`application/octet-stream\` so the browser doesn't try to preview
+ * the downloaded file as JSON — when we force a download, we want the user
+ * to get a saveable binary, not a pretty-printed browser tab.
+ */
+const getDownloadContentType = (response: Response): string => {
+    const contentType = response.headers.get('content-type');
+    if (isJsonContentType(contentType)) {
+        return 'application/octet-stream';
+    }
+    return contentType || 'application/octet-stream';
+};
+
+/**
+ * Conditionally triggers a browser download for a response body.
+ *
+ * Only acts when the response carries \`Content-Disposition: attachment\` — this
+ * is the server's explicit opt-in signal that the body is a file the user
+ * should save. For any other response (no header, \`inline\` disposition) this
+ * is a silent no-op, so callers can safely invoke it on every \`SMART_DOWNLOAD\`
+ * request without worrying about spurious downloads.
+ *
+ * Filename comes from the \`Content-Disposition\` header (see
+ * \`getContentDispositionFilename\`); the blob is stamped with a download-safe
+ * content type (see \`getDownloadContentType\`) and handed to \`downloadBlob\`.
+ */
+const handleFileDownload = (response: Response, responseBody: any): void => {
+    const contentDisposition = response.headers.get('content-disposition');
+    if (!contentDisposition || !contentDisposition.includes('attachment')) {
+        return;
+    }
+    const filename = getContentDispositionFilename(contentDisposition);
+    const blob = new Blob([responseBody], { type: getDownloadContentType(response) });
+    downloadBlob(blob, filename);
 };
 
 export const catchErrorCodes = (options: ApiRequestOptions, result: ApiResult): void => {
@@ -680,14 +821,27 @@ export const catchErrorCodes = (options: ApiRequestOptions, result: ApiResult): 
 export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): CancelablePromise<T> => {
     return new CancelablePromise(async (resolve, reject, onCancel) => {
         try {
+            const cacheProvider = config.CACHE_PROVIDER;
+            const isCacheEnabled = Boolean(config.CACHE_OPTIONS?.enabled && cacheProvider);
+            let cacheKey: string | undefined;
+            if (isCacheEnabled && cacheProvider) {
+                cacheKey = config.CACHE_OPTIONS?.key ?? JSON.stringify(options);
+                const cachedResult = await cacheProvider.getItem(cacheKey);
+                if (cachedResult) {
+                    resolve(JSON.parse(cachedResult));
+                    return;
+                }
+            }
+
             const url = getUrl(config, options);
             const formData = getFormData(options);
             const body = getRequestBody(options);
             const headers = await getHeaders(config, options);
 
             if (!onCancel.isCancelled) {
+                const isSmartDownload = Boolean(config.SMART_DOWNLOAD);
                 const response = await sendRequest(config, options, url, body, formData, headers, onCancel);
-                const responseBody = await getResponseBody(response);
+                const responseBody = await getResponseBody(response, config, isSmartDownload);
                 const responseHeader = getResponseHeader(response, options.responseHeader);
 
                 const result: ApiResult = {
@@ -700,6 +854,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
 
                 catchErrorCodes(options, result);
 
+                if (isCacheEnabled && cacheKey && cacheProvider) {
+                    await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
+                }
+
+                if (isSmartDownload) {
+                    handleFileDownload(response, responseBody);
+                }
+
                 resolve(result.body);
             }
         } catch (error) {
@@ -711,7 +873,7 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
 `;
 
 exports[`client should generate: test/generated/client/index.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -888,7 +1050,7 @@ export { UploadService } from './services/UploadService';
 `;
 
 exports[`client should generate: test/generated/client/models/_default.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -900,7 +1062,7 @@ export type _default = {
 `;
 
 exports[`client should generate: test/generated/client/models/ArrayWithArray.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -913,7 +1075,7 @@ export type ArrayWithArray = Array<Array<ModelWithString>>;
 `;
 
 exports[`client should generate: test/generated/client/models/ArrayWithBooleans.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -925,7 +1087,7 @@ export type ArrayWithBooleans = Array<boolean>;
 `;
 
 exports[`client should generate: test/generated/client/models/ArrayWithNumbers.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -937,7 +1099,7 @@ export type ArrayWithNumbers = Array<number>;
 `;
 
 exports[`client should generate: test/generated/client/models/ArrayWithProperties.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -952,7 +1114,7 @@ export type ArrayWithProperties = Array<{
 `;
 
 exports[`client should generate: test/generated/client/models/ArrayWithReferences.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -965,7 +1127,7 @@ export type ArrayWithReferences = Array<ModelWithString>;
 `;
 
 exports[`client should generate: test/generated/client/models/ArrayWithStrings.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -977,7 +1139,7 @@ export type ArrayWithStrings = Array<string>;
 `;
 
 exports[`client should generate: test/generated/client/models/CommentWithBackticks.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -989,7 +1151,7 @@ export type CommentWithBackticks = number;
 `;
 
 exports[`client should generate: test/generated/client/models/CommentWithBreaks.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1004,7 +1166,7 @@ export type CommentWithBreaks = number;
 `;
 
 exports[`client should generate: test/generated/client/models/CommentWithExpressionPlaceholders.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1016,7 +1178,7 @@ export type CommentWithExpressionPlaceholders = number;
 `;
 
 exports[`client should generate: test/generated/client/models/CommentWithQuotes.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1028,7 +1190,7 @@ export type CommentWithQuotes = number;
 `;
 
 exports[`client should generate: test/generated/client/models/CommentWithReservedCharacters.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1040,7 +1202,7 @@ export type CommentWithReservedCharacters = number;
 `;
 
 exports[`client should generate: test/generated/client/models/CommentWithSlashes.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1052,7 +1214,7 @@ export type CommentWithSlashes = number;
 `;
 
 exports[`client should generate: test/generated/client/models/CompositionBaseModel.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1068,7 +1230,7 @@ export type CompositionBaseModel = {
 `;
 
 exports[`client should generate: test/generated/client/models/CompositionExtendedModel.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1086,7 +1248,7 @@ export type CompositionExtendedModel = (CompositionBaseModel & {
 `;
 
 exports[`client should generate: test/generated/client/models/CompositionWithAllOfAndNullable.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1106,7 +1268,7 @@ export type CompositionWithAllOfAndNullable = {
 `;
 
 exports[`client should generate: test/generated/client/models/CompositionWithAnyOf.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1125,7 +1287,7 @@ export type CompositionWithAnyOf = {
 `;
 
 exports[`client should generate: test/generated/client/models/CompositionWithAnyOfAndNullable.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1145,7 +1307,7 @@ export type CompositionWithAnyOfAndNullable = {
 `;
 
 exports[`client should generate: test/generated/client/models/CompositionWithAnyOfAnonymous.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1162,7 +1324,7 @@ export type CompositionWithAnyOfAnonymous = {
 `;
 
 exports[`client should generate: test/generated/client/models/CompositionWithOneOf.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1181,7 +1343,7 @@ export type CompositionWithOneOf = {
 `;
 
 exports[`client should generate: test/generated/client/models/CompositionWithOneOfAndComplexArrayDictionary.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1196,7 +1358,7 @@ export type CompositionWithOneOfAndComplexArrayDictionary = {
 `;
 
 exports[`client should generate: test/generated/client/models/CompositionWithOneOfAndNullable.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1216,7 +1378,7 @@ export type CompositionWithOneOfAndNullable = {
 `;
 
 exports[`client should generate: test/generated/client/models/CompositionWithOneOfAndSimpleArrayDictionary.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1231,7 +1393,7 @@ export type CompositionWithOneOfAndSimpleArrayDictionary = {
 `;
 
 exports[`client should generate: test/generated/client/models/CompositionWithOneOfAndSimpleDictionary.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1246,7 +1408,7 @@ export type CompositionWithOneOfAndSimpleDictionary = {
 `;
 
 exports[`client should generate: test/generated/client/models/CompositionWithOneOfAnonymous.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1263,7 +1425,7 @@ export type CompositionWithOneOfAnonymous = {
 `;
 
 exports[`client should generate: test/generated/client/models/CompositionWithOneOfDiscriminator.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1278,7 +1440,7 @@ export type CompositionWithOneOfDiscriminator = (ModelCircle | ModelSquare);
 `;
 
 exports[`client should generate: test/generated/client/models/DeprecatedModel.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1298,7 +1460,7 @@ export type DeprecatedModel = {
 `;
 
 exports[`client should generate: test/generated/client/models/DictionaryWithArray.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1311,7 +1473,7 @@ export type DictionaryWithArray = Record<string, Array<ModelWithString>>;
 `;
 
 exports[`client should generate: test/generated/client/models/DictionaryWithDictionary.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1323,7 +1485,7 @@ export type DictionaryWithDictionary = Record<string, Record<string, string>>;
 `;
 
 exports[`client should generate: test/generated/client/models/DictionaryWithProperties.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1338,7 +1500,7 @@ export type DictionaryWithProperties = Record<string, {
 `;
 
 exports[`client should generate: test/generated/client/models/DictionaryWithReference.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1351,7 +1513,7 @@ export type DictionaryWithReference = Record<string, ModelWithString>;
 `;
 
 exports[`client should generate: test/generated/client/models/DictionaryWithString.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1363,7 +1525,7 @@ export type DictionaryWithString = Record<string, string>;
 `;
 
 exports[`client should generate: test/generated/client/models/EnumFromDescription.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1375,7 +1537,7 @@ export type EnumFromDescription = number;
 `;
 
 exports[`client should generate: test/generated/client/models/EnumWithExtensions.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1400,7 +1562,7 @@ export enum EnumWithExtensions {
 `;
 
 exports[`client should generate: test/generated/client/models/EnumWithNumbers.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1428,7 +1590,7 @@ export enum EnumWithNumbers {
 `;
 
 exports[`client should generate: test/generated/client/models/EnumWithStrings.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1446,7 +1608,7 @@ export enum EnumWithStrings {
 `;
 
 exports[`client should generate: test/generated/client/models/File.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1462,7 +1624,7 @@ export type File = {
 `;
 
 exports[`client should generate: test/generated/client/models/FreeFormObjectWithAdditionalPropertiesEqEmptyObject.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1474,7 +1636,7 @@ export type FreeFormObjectWithAdditionalPropertiesEqEmptyObject = Record<string,
 `;
 
 exports[`client should generate: test/generated/client/models/FreeFormObjectWithAdditionalPropertiesEqTrue.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1486,7 +1648,7 @@ export type FreeFormObjectWithAdditionalPropertiesEqTrue = Record<string, any>;
 `;
 
 exports[`client should generate: test/generated/client/models/FreeFormObjectWithoutAdditionalProperties.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1498,7 +1660,7 @@ export type FreeFormObjectWithoutAdditionalProperties = Record<string, any>;
 `;
 
 exports[`client should generate: test/generated/client/models/ModelCircle.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1514,7 +1676,7 @@ export type ModelCircle = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelSquare.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1530,7 +1692,7 @@ export type ModelSquare = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelThatExtends.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1547,7 +1709,7 @@ export type ModelThatExtends = (ModelWithString & {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelThatExtendsExtends.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1565,7 +1727,7 @@ export type ModelThatExtendsExtends = (ModelWithString & ModelThatExtends & {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithArray.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1583,7 +1745,7 @@ export type ModelWithArray = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithBoolean.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1601,7 +1763,7 @@ export type ModelWithBoolean = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithCircularReference.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1616,7 +1778,7 @@ export type ModelWithCircularReference = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithDictionary.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1631,7 +1793,7 @@ export type ModelWithDictionary = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithDuplicateImports.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1649,7 +1811,7 @@ export type ModelWithDuplicateImports = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithDuplicateProperties.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1665,7 +1827,7 @@ export type ModelWithDuplicateProperties = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithEnum.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1712,7 +1874,7 @@ export namespace ModelWithEnum {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithEnumFromDescription.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1730,7 +1892,7 @@ export type ModelWithEnumFromDescription = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithInteger.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1748,7 +1910,7 @@ export type ModelWithInteger = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithNestedEnums.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1766,7 +1928,7 @@ export type ModelWithNestedEnums = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithNestedProperties.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1785,7 +1947,7 @@ export type ModelWithNestedProperties = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithNullableString.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1815,7 +1977,7 @@ export type ModelWithNullableString = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithOrderedProperties.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1832,7 +1994,7 @@ export type ModelWithOrderedProperties = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithPattern.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1853,7 +2015,7 @@ export type ModelWithPattern = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithProperties.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1880,7 +2042,7 @@ export type ModelWithProperties = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithReference.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1896,7 +2058,7 @@ export type ModelWithReference = {
 `;
 
 exports[`client should generate: test/generated/client/models/ModelWithString.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1914,7 +2076,7 @@ export type ModelWithString = {
 `;
 
 exports[`client should generate: test/generated/client/models/Pageable.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1928,7 +2090,7 @@ export type Pageable = {
 `;
 
 exports[`client should generate: test/generated/client/models/SimpleBoolean.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1940,7 +2102,7 @@ export type SimpleBoolean = boolean;
 `;
 
 exports[`client should generate: test/generated/client/models/SimpleFile.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1952,7 +2114,7 @@ export type SimpleFile = Blob;
 `;
 
 exports[`client should generate: test/generated/client/models/SimpleInteger.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1964,7 +2126,7 @@ export type SimpleInteger = number;
 `;
 
 exports[`client should generate: test/generated/client/models/SimpleParameter.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1976,7 +2138,7 @@ export type SimpleParameter = string;
 `;
 
 exports[`client should generate: test/generated/client/models/SimpleReference.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -1989,7 +2151,7 @@ export type SimpleReference = ModelWithString;
 `;
 
 exports[`client should generate: test/generated/client/models/SimpleString.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2001,7 +2163,7 @@ export type SimpleString = string;
 `;
 
 exports[`client should generate: test/generated/client/models/SimpleStringWithPattern.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2013,7 +2175,7 @@ export type SimpleStringWithPattern = string | null;
 `;
 
 exports[`client should generate: test/generated/client/schemas/$_default.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2028,7 +2190,7 @@ export const $_default = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ArrayWithArray.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2045,7 +2207,7 @@ export const $ArrayWithArray = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ArrayWithBooleans.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2059,7 +2221,7 @@ export const $ArrayWithBooleans = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ArrayWithNumbers.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2073,7 +2235,7 @@ export const $ArrayWithNumbers = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ArrayWithProperties.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2094,7 +2256,7 @@ export const $ArrayWithProperties = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ArrayWithReferences.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2108,7 +2270,7 @@ export const $ArrayWithReferences = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ArrayWithStrings.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2122,7 +2284,7 @@ export const $ArrayWithStrings = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CommentWithBackticks.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2134,7 +2296,7 @@ export const $CommentWithBackticks = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CommentWithBreaks.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2148,7 +2310,7 @@ export const $CommentWithBreaks = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CommentWithExpressionPlaceholders.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2160,7 +2322,7 @@ export const $CommentWithExpressionPlaceholders = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CommentWithQuotes.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2172,7 +2334,7 @@ export const $CommentWithQuotes = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CommentWithReservedCharacters.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2184,7 +2346,7 @@ export const $CommentWithReservedCharacters = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CommentWithSlashes.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2196,7 +2358,7 @@ export const $CommentWithSlashes = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CompositionBaseModel.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2215,7 +2377,7 @@ export const $CompositionBaseModel = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CompositionExtendedModel.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2245,7 +2407,7 @@ export const $CompositionExtendedModel = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CompositionWithAllOfAndNullable.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2275,7 +2437,7 @@ export const $CompositionWithAllOfAndNullable = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CompositionWithAnyOf.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2300,7 +2462,7 @@ export const $CompositionWithAnyOf = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CompositionWithAnyOfAndNullable.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2330,7 +2492,7 @@ export const $CompositionWithAnyOfAndNullable = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CompositionWithAnyOfAnonymous.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2360,7 +2522,7 @@ export const $CompositionWithAnyOfAnonymous = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CompositionWithOneOf.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2385,7 +2547,7 @@ export const $CompositionWithOneOf = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CompositionWithOneOfAndComplexArrayDictionary.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2417,7 +2579,7 @@ export const $CompositionWithOneOfAndComplexArrayDictionary = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CompositionWithOneOfAndNullable.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2447,7 +2609,7 @@ export const $CompositionWithOneOfAndNullable = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CompositionWithOneOfAndSimpleArrayDictionary.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2474,7 +2636,7 @@ export const $CompositionWithOneOfAndSimpleArrayDictionary = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CompositionWithOneOfAndSimpleDictionary.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2498,7 +2660,7 @@ export const $CompositionWithOneOfAndSimpleDictionary = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CompositionWithOneOfAnonymous.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2528,7 +2690,7 @@ export const $CompositionWithOneOfAnonymous = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$CompositionWithOneOfDiscriminator.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2545,7 +2707,7 @@ export const $CompositionWithOneOfDiscriminator = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$DeprecatedModel.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2562,7 +2724,7 @@ export const $DeprecatedModel = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$DictionaryWithArray.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2579,7 +2741,7 @@ export const $DictionaryWithArray = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$DictionaryWithDictionary.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2596,7 +2758,7 @@ export const $DictionaryWithDictionary = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$DictionaryWithProperties.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2617,7 +2779,7 @@ export const $DictionaryWithProperties = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$DictionaryWithReference.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2631,7 +2793,7 @@ export const $DictionaryWithReference = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$DictionaryWithString.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2645,7 +2807,7 @@ export const $DictionaryWithString = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$EnumFromDescription.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2657,7 +2819,7 @@ export const $EnumFromDescription = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$EnumWithExtensions.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2668,7 +2830,7 @@ export const $EnumWithExtensions = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$EnumWithNumbers.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2679,7 +2841,7 @@ export const $EnumWithNumbers = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$EnumWithStrings.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2690,7 +2852,7 @@ export const $EnumWithStrings = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$File.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2728,7 +2890,7 @@ export const $File = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$FreeFormObjectWithAdditionalPropertiesEqEmptyObject.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2743,7 +2905,7 @@ export const $FreeFormObjectWithAdditionalPropertiesEqEmptyObject = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$FreeFormObjectWithAdditionalPropertiesEqTrue.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2758,7 +2920,7 @@ export const $FreeFormObjectWithAdditionalPropertiesEqTrue = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$FreeFormObjectWithoutAdditionalProperties.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2773,7 +2935,7 @@ export const $FreeFormObjectWithoutAdditionalProperties = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelCircle.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2793,7 +2955,7 @@ export const $ModelCircle = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelSquare.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2813,7 +2975,7 @@ export const $ModelSquare = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelThatExtends.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2837,7 +2999,7 @@ export const $ModelThatExtends = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelThatExtendsExtends.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2863,7 +3025,7 @@ export const $ModelThatExtendsExtends = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithArray.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2894,7 +3056,7 @@ export const $ModelWithArray = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithBoolean.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2911,7 +3073,7 @@ export const $ModelWithBoolean = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithCircularReference.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2927,7 +3089,7 @@ export const $ModelWithCircularReference = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithDictionary.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2946,7 +3108,7 @@ export const $ModelWithDictionary = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithDuplicateImports.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2968,7 +3130,7 @@ export const $ModelWithDuplicateImports = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithDuplicateProperties.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -2984,7 +3146,7 @@ export const $ModelWithDuplicateProperties = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithEnum.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3007,7 +3169,7 @@ export const $ModelWithEnum = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithEnumFromDescription.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3024,7 +3186,7 @@ export const $ModelWithEnumFromDescription = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithInteger.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3041,7 +3203,7 @@ export const $ModelWithInteger = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithNestedEnums.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3080,7 +3242,7 @@ export const $ModelWithNestedEnums = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithNestedProperties.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3113,7 +3275,7 @@ export const $ModelWithNestedProperties = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithNullableString.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3148,7 +3310,7 @@ export const $ModelWithNullableString = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithOrderedProperties.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3170,7 +3332,7 @@ export const $ModelWithOrderedProperties = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithPattern.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3215,7 +3377,7 @@ export const $ModelWithPattern = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithProperties.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3271,7 +3433,7 @@ export const $ModelWithProperties = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithReference.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3287,7 +3449,7 @@ export const $ModelWithReference = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$ModelWithString.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3304,7 +3466,7 @@ export const $ModelWithString = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$Pageable.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3331,7 +3493,7 @@ export const $Pageable = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$SimpleBoolean.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3343,7 +3505,7 @@ export const $SimpleBoolean = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$SimpleFile.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3355,7 +3517,7 @@ export const $SimpleFile = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$SimpleInteger.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3367,7 +3529,7 @@ export const $SimpleInteger = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$SimpleParameter.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3379,7 +3541,7 @@ export const $SimpleParameter = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$SimpleReference.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3391,7 +3553,7 @@ export const $SimpleReference = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$SimpleString.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3403,7 +3565,7 @@ export const $SimpleString = {
 `;
 
 exports[`client should generate: test/generated/client/schemas/$SimpleStringWithPattern.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3418,7 +3580,7 @@ export const $SimpleStringWithPattern = {
 `;
 
 exports[`client should generate: test/generated/client/services/CollectionFormatService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3464,7 +3626,7 @@ export class CollectionFormatService {
 `;
 
 exports[`client should generate: test/generated/client/services/ComplexService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3553,7 +3715,7 @@ export class ComplexService {
 `;
 
 exports[`client should generate: test/generated/client/services/DefaultService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3582,7 +3744,7 @@ export class DefaultService {
 `;
 
 exports[`client should generate: test/generated/client/services/DefaultsService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3706,7 +3868,7 @@ export class DefaultsService {
 `;
 
 exports[`client should generate: test/generated/client/services/DeprecatedService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3742,7 +3904,7 @@ export class DeprecatedService {
 `;
 
 exports[`client should generate: test/generated/client/services/DescriptionsService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3794,7 +3956,7 @@ export class DescriptionsService {
 `;
 
 exports[`client should generate: test/generated/client/services/DuplicateService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3868,7 +4030,7 @@ export class DuplicateService {
 `;
 
 exports[`client should generate: test/generated/client/services/ErrorService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3909,7 +4071,7 @@ export class ErrorService {
 `;
 
 exports[`client should generate: test/generated/client/services/FormDataService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3948,7 +4110,7 @@ export class FormDataService {
 `;
 
 exports[`client should generate: test/generated/client/services/HeaderService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -3983,7 +4145,7 @@ export class HeaderService {
 `;
 
 exports[`client should generate: test/generated/client/services/MultipartService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -4042,7 +4204,7 @@ export class MultipartService {
 `;
 
 exports[`client should generate: test/generated/client/services/MultipleTags1Service.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -4088,7 +4250,7 @@ export class MultipleTags1Service {
 `;
 
 exports[`client should generate: test/generated/client/services/MultipleTags2Service.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -4134,7 +4296,7 @@ export class MultipleTags2Service {
 `;
 
 exports[`client should generate: test/generated/client/services/MultipleTags3Service.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -4164,7 +4326,7 @@ export class MultipleTags3Service {
 `;
 
 exports[`client should generate: test/generated/client/services/NoContentService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -4194,7 +4356,7 @@ export class NoContentService {
 `;
 
 exports[`client should generate: test/generated/client/services/ParametersService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -4355,7 +4517,7 @@ export class ParametersService {
 `;
 
 exports[`client should generate: test/generated/client/services/RequestBodyService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -4394,7 +4556,7 @@ export class RequestBodyService {
 `;
 
 exports[`client should generate: test/generated/client/services/ResponseService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -4476,7 +4638,7 @@ export class ResponseService {
 `;
 
 exports[`client should generate: test/generated/client/services/SimpleService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -4595,7 +4757,7 @@ export class SimpleService {
 `;
 
 exports[`client should generate: test/generated/client/services/TypesService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -4656,7 +4818,7 @@ export class TypesService {
 `;
 
 exports[`client should generate: test/generated/client/services/UploadService.ts 1`] = `
-"/* generated using openapi-typescript-codegen -- do no edit */
+"/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -4900,6 +5062,20 @@ import type { ApiRequestOptions } from './ApiRequestOptions';
 type Resolver<T> = (options: ApiRequestOptions) => Promise<T>;
 type Headers = Record<string, string>;
 
+export type ApiCacheOptions = {
+    enabled: boolean;
+    ttl?: number;
+    key?: string;
+    featureToggled?: boolean;
+};
+
+export interface CacheProvider {
+    getItem(key: string): Promise<string | null | undefined>;
+    setItem(key: string, value: string): Promise<void>;
+    removeItem?(key: string): Promise<void> | void;
+    destroy?(opts?: { clearData?: boolean }): void;
+}
+
 export type OpenAPIConfig = {
     BASE: string;
     VERSION: string;
@@ -4910,6 +5086,11 @@ export type OpenAPIConfig = {
     PASSWORD?: string | Resolver<string> | undefined;
     HEADERS?: Headers | Resolver<Headers> | undefined;
     ENCODE_PATH?: ((path: string) => string) | undefined;
+    CACHE_OPTIONS?: ApiCacheOptions | undefined;
+    CACHE_PROVIDER?: CacheProvider | undefined;
+    SMART_DOWNLOAD?: boolean | undefined;
+    REDIRECT?: RequestRedirect | undefined;
+    ON_OPAQUE_REDIRECT?: ((response: Response) => void) | undefined;
 };
 
 export const OpenAPI: OpenAPIConfig = {
@@ -4922,6 +5103,11 @@ export const OpenAPI: OpenAPIConfig = {
     PASSWORD: undefined,
     HEADERS: undefined,
     ENCODE_PATH: undefined,
+    CACHE_OPTIONS: undefined,
+    CACHE_PROVIDER: undefined,
+    SMART_DOWNLOAD: false,
+    REDIRECT: undefined,
+    ON_OPAQUE_REDIRECT: undefined,
 };
 "
 `;
@@ -5139,6 +5325,10 @@ export const sendRequest = async (
         signal: controller.signal,
     };
 
+    if (config.REDIRECT) {
+        request.redirect = config.REDIRECT;
+    }
+
     if (config.WITH_CREDENTIALS) {
         request.credentials = config.CREDENTIALS;
     }
@@ -5158,15 +5348,30 @@ export const getResponseHeader = (response: Response, responseHeader?: string): 
     return undefined;
 };
 
-export const getResponseBody = async (response: Response): Promise<any> => {
-    if (response.status !== 204) {
+const isJsonContentType = (contentType: string | null): boolean => {
+    if (!contentType) return false;
+    const jsonTypes = ['application/json', 'application/problem+json'];
+    return jsonTypes.some(type => contentType.toLowerCase().startsWith(type));
+};
+
+export const getResponseBody = async (
+    response: Response,
+    config: OpenAPIConfig,
+    isSmartDownload?: boolean,
+): Promise<any> => {
+    if (response.type === 'opaqueredirect') {
+        config.ON_OPAQUE_REDIRECT?.(response);
+        return undefined;
+    }
+    if (response.status !== 204 && response.status !== 302) {
         try {
             const contentType = response.headers.get('Content-Type');
             if (contentType) {
-                const jsonTypes = ['application/json', 'application/problem+json']
-                const isJSON = jsonTypes.some(type => contentType.toLowerCase().startsWith(type));
-                if (isJSON) {
+                const isJSON = isJsonContentType(contentType);
+                if (isJSON && !isSmartDownload) {
                     return await response.json();
+                } else if (contentType.includes('application/pdf')) {
+                    return await response.blob();
                 } else {
                     return await response.text();
                 }
@@ -5176,6 +5381,102 @@ export const getResponseBody = async (response: Response): Promise<any> => {
         }
     }
     return undefined;
+};
+
+/**
+ * Extracts a filename from an HTTP \`Content-Disposition\` header value.
+ *
+ * Handles these forms, in order of preference:
+ *   1. \`filename*=UTF-8''<percent-encoded>\` — RFC 5987/8187 extended parameter
+ *      (only the UTF-8 charset is recognized; other charsets fall through).
+ *   2. \`filename="..."\` — quoted form (RFC 6266).
+ *   3. \`filename=...\`   — bare token form (RFC 6266).
+ *
+ * Returns \`'download'\` as a last-resort fallback when the header is missing
+ * or none of the patterns match. Non-UTF-8 extended params, multi-line
+ * continuations, and other exotic RFC 6266 edge cases are intentionally not
+ * handled — if that becomes necessary, swap this helper for the npm
+ * \`content-disposition\` package.
+ */
+const getContentDispositionFilename = (contentDisposition: string | null): string => {
+    if (!contentDisposition) return 'download';
+    const utf8Match = contentDisposition.match(/filename\\*=UTF-8''([^;]+)/i);
+    if (utf8Match?.[1]) {
+        try {
+            return decodeURIComponent(utf8Match[1]);
+        } catch {
+            /* fall through */
+        }
+    }
+    const quotedMatch = contentDisposition.match(/filename="([^"]+)"/i);
+    if (quotedMatch?.[1]) {
+        return quotedMatch[1];
+    }
+    const bareMatch = contentDisposition.match(/filename=([^;]+)/i);
+    if (bareMatch?.[1]) {
+        return bareMatch[1].trim();
+    }
+    return 'download';
+};
+
+/**
+ * Triggers a browser "Save file" dialog for the given \`Blob\` under \`filename\`.
+ *
+ * Uses the standard synthetic-anchor pattern: create an \`<a>\` pointing at an
+ * object URL, append it to the DOM (required by some browsers for \`.click()\`
+ * to take effect), click it, then tear it down and revoke the object URL to
+ * release the underlying blob reference.
+ *
+ * Browser-only — relies on \`document\` and \`URL.createObjectURL\`. Not usable in
+ * Node/SSR contexts.
+ */
+const downloadBlob = (blob: Blob, filename: string): void => {
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+};
+
+/**
+ * Picks the MIME type to stamp on the saved \`Blob\`.
+ *
+ * Mirrors the server's \`Content-Type\` in most cases. Maps JSON-ish content
+ * types to \`application/octet-stream\` so the browser doesn't try to preview
+ * the downloaded file as JSON — when we force a download, we want the user
+ * to get a saveable binary, not a pretty-printed browser tab.
+ */
+const getDownloadContentType = (response: Response): string => {
+    const contentType = response.headers.get('content-type');
+    if (isJsonContentType(contentType)) {
+        return 'application/octet-stream';
+    }
+    return contentType || 'application/octet-stream';
+};
+
+/**
+ * Conditionally triggers a browser download for a response body.
+ *
+ * Only acts when the response carries \`Content-Disposition: attachment\` — this
+ * is the server's explicit opt-in signal that the body is a file the user
+ * should save. For any other response (no header, \`inline\` disposition) this
+ * is a silent no-op, so callers can safely invoke it on every \`SMART_DOWNLOAD\`
+ * request without worrying about spurious downloads.
+ *
+ * Filename comes from the \`Content-Disposition\` header (see
+ * \`getContentDispositionFilename\`); the blob is stamped with a download-safe
+ * content type (see \`getDownloadContentType\`) and handed to \`downloadBlob\`.
+ */
+const handleFileDownload = (response: Response, responseBody: any): void => {
+    const contentDisposition = response.headers.get('content-disposition');
+    if (!contentDisposition || !contentDisposition.includes('attachment')) {
+        return;
+    }
+    const filename = getContentDispositionFilename(contentDisposition);
+    const blob = new Blob([responseBody], { type: getDownloadContentType(response) });
+    downloadBlob(blob, filename);
 };
 
 export const catchErrorCodes = (options: ApiRequestOptions, result: ApiResult): void => {
@@ -5222,14 +5523,27 @@ export const catchErrorCodes = (options: ApiRequestOptions, result: ApiResult): 
 export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): CancelablePromise<T> => {
     return new CancelablePromise(async (resolve, reject, onCancel) => {
         try {
+            const cacheProvider = config.CACHE_PROVIDER;
+            const isCacheEnabled = Boolean(config.CACHE_OPTIONS?.enabled && cacheProvider);
+            let cacheKey: string | undefined;
+            if (isCacheEnabled && cacheProvider) {
+                cacheKey = config.CACHE_OPTIONS?.key ?? JSON.stringify(options);
+                const cachedResult = await cacheProvider.getItem(cacheKey);
+                if (cachedResult) {
+                    resolve(JSON.parse(cachedResult));
+                    return;
+                }
+            }
+
             const url = getUrl(config, options);
             const formData = getFormData(options);
             const body = getRequestBody(options);
             const headers = await getHeaders(config, options);
 
             if (!onCancel.isCancelled) {
+                const isSmartDownload = Boolean(config.SMART_DOWNLOAD);
                 const response = await sendRequest(config, options, url, body, formData, headers, onCancel);
-                const responseBody = await getResponseBody(response);
+                const responseBody = await getResponseBody(response, config, isSmartDownload);
                 const responseHeader = getResponseHeader(response, options.responseHeader);
 
                 const result: ApiResult = {
@@ -5241,6 +5555,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
                 };
 
                 catchErrorCodes(options, result);
+
+                if (isCacheEnabled && cacheKey && cacheProvider) {
+                    await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
+                }
+
+                if (isSmartDownload) {
+                    handleFileDownload(response, responseBody);
+                }
 
                 resolve(result.body);
             }
@@ -7045,7 +7367,7 @@ export class CollectionFormatService {
         parameterArrayTsv: Array<string>,
         parameterArrayPipes: Array<string>,
         parameterArrayMulti: Array<string>,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7093,7 +7415,7 @@ export class ComplexService {
             };
         },
         parameterReference: ModelWithString,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<Array<ModelWithString>> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7130,7 +7452,7 @@ export class DefaultService {
      * @throws ApiError
      */
     public static serviceWithEmptyTag(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7172,7 +7494,7 @@ export class DefaultsService {
         parameterModel: ModelWithString = {
             "prop": "Hello World!"
         },
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7206,7 +7528,7 @@ export class DefaultsService {
         parameterModel: ModelWithString = {
             "prop": "Hello World!"
         },
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7244,7 +7566,7 @@ export class DefaultsService {
         parameterStringWithEmptyDefault: string = '',
         parameterStringNullableWithNoDefault?: string | null,
         parameterStringNullableWithDefault: string | null = null,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7298,7 +7620,7 @@ export class DescriptionsService {
         parameterWithExpressionPlaceholders?: string,
         parameterWithQuotes?: string,
         parameterWithReservedCharacters?: string,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7335,7 +7657,7 @@ export class DuplicateService {
      * @throws ApiError
      */
     public static duplicateName(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7350,7 +7672,7 @@ export class DuplicateService {
      * @throws ApiError
      */
     public static duplicateName1(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7365,7 +7687,7 @@ export class DuplicateService {
      * @throws ApiError
      */
     public static duplicateName2(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7380,7 +7702,7 @@ export class DuplicateService {
      * @throws ApiError
      */
     public static duplicateName3(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7412,7 +7734,7 @@ export class ErrorService {
      */
     public static testErrorCode(
         status: string,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<any> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7451,7 +7773,7 @@ export class HeaderService {
      * @throws ApiError
      */
     public static callWithResultFromHeader(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<string> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7486,7 +7808,7 @@ export class MultipleTags1Service {
      * @throws ApiError
      */
     public static dummyA(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7502,7 +7824,7 @@ export class MultipleTags1Service {
      * @throws ApiError
      */
     public static dummyB(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7532,7 +7854,7 @@ export class MultipleTags2Service {
      * @throws ApiError
      */
     public static dummyA(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7548,7 +7870,7 @@ export class MultipleTags2Service {
      * @throws ApiError
      */
     public static dummyB(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7578,7 +7900,7 @@ export class MultipleTags3Service {
      * @throws ApiError
      */
     public static dummyB(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7608,7 +7930,7 @@ export class NoContentService {
      * @throws ApiError
      */
     public static callWithNoContentResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7647,7 +7969,7 @@ export class ParametersService {
         parameterForm: string,
         parameterBody: string,
         parameterPath: string,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7691,7 +8013,7 @@ export class ParametersService {
         parameterPath2?: string,
         parameterPath3?: string,
         _default?: string,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7740,7 +8062,7 @@ export class ResponseService {
      * @throws ApiError
      */
     public static callWithResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<ModelWithString> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7756,7 +8078,7 @@ export class ResponseService {
      * @throws ApiError
      */
     public static callWithDuplicateResponses(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<ModelWithString> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7780,7 +8102,7 @@ export class ResponseService {
      * @throws ApiError
      */
     public static callWithResponses(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<{
         readonly '@namespace.string'?: string;
         readonly '@namespace.integer'?: number;
@@ -7818,7 +8140,7 @@ export class SimpleService {
      * @throws ApiError
      */
     public static getCallWithoutParametersAndResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7833,7 +8155,7 @@ export class SimpleService {
      * @throws ApiError
      */
     public static putCallWithoutParametersAndResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7848,7 +8170,7 @@ export class SimpleService {
      * @throws ApiError
      */
     public static postCallWithoutParametersAndResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7863,7 +8185,7 @@ export class SimpleService {
      * @throws ApiError
      */
     public static deleteCallWithoutParametersAndResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7878,7 +8200,7 @@ export class SimpleService {
      * @throws ApiError
      */
     public static optionsCallWithoutParametersAndResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7893,7 +8215,7 @@ export class SimpleService {
      * @throws ApiError
      */
     public static headCallWithoutParametersAndResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7908,7 +8230,7 @@ export class SimpleService {
      * @throws ApiError
      */
     public static patchCallWithoutParametersAndResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -7957,7 +8279,7 @@ export class TypesService {
         parameterBoolean: boolean = true,
         parameterObject: any = null,
         id?: number,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<number | string | boolean | any> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -8193,6 +8515,20 @@ import type { ApiRequestOptions } from './ApiRequestOptions';
 type Resolver<T> = (options: ApiRequestOptions) => Promise<T>;
 type Headers = Record<string, string>;
 
+export type ApiCacheOptions = {
+    enabled: boolean;
+    ttl?: number;
+    key?: string;
+    featureToggled?: boolean;
+};
+
+export interface CacheProvider {
+    getItem(key: string): Promise<string | null | undefined>;
+    setItem(key: string, value: string): Promise<void>;
+    removeItem?(key: string): Promise<void> | void;
+    destroy?(opts?: { clearData?: boolean }): void;
+}
+
 export type OpenAPIConfig = {
     BASE: string;
     VERSION: string;
@@ -8203,6 +8539,11 @@ export type OpenAPIConfig = {
     PASSWORD?: string | Resolver<string> | undefined;
     HEADERS?: Headers | Resolver<Headers> | undefined;
     ENCODE_PATH?: ((path: string) => string) | undefined;
+    CACHE_OPTIONS?: ApiCacheOptions | undefined;
+    CACHE_PROVIDER?: CacheProvider | undefined;
+    SMART_DOWNLOAD?: boolean | undefined;
+    REDIRECT?: RequestRedirect | undefined;
+    ON_OPAQUE_REDIRECT?: ((response: Response) => void) | undefined;
 };
 
 export const OpenAPI: OpenAPIConfig = {
@@ -8215,6 +8556,11 @@ export const OpenAPI: OpenAPIConfig = {
     PASSWORD: undefined,
     HEADERS: undefined,
     ENCODE_PATH: undefined,
+    CACHE_OPTIONS: undefined,
+    CACHE_PROVIDER: undefined,
+    SMART_DOWNLOAD: false,
+    REDIRECT: undefined,
+    ON_OPAQUE_REDIRECT: undefined,
 };
 "
 `;
@@ -8432,6 +8778,10 @@ export const sendRequest = async (
         signal: controller.signal,
     };
 
+    if (config.REDIRECT) {
+        request.redirect = config.REDIRECT;
+    }
+
     if (config.WITH_CREDENTIALS) {
         request.credentials = config.CREDENTIALS;
     }
@@ -8451,15 +8801,30 @@ export const getResponseHeader = (response: Response, responseHeader?: string): 
     return undefined;
 };
 
-export const getResponseBody = async (response: Response): Promise<any> => {
-    if (response.status !== 204) {
+const isJsonContentType = (contentType: string | null): boolean => {
+    if (!contentType) return false;
+    const jsonTypes = ['application/json', 'application/problem+json'];
+    return jsonTypes.some(type => contentType.toLowerCase().startsWith(type));
+};
+
+export const getResponseBody = async (
+    response: Response,
+    config: OpenAPIConfig,
+    isSmartDownload?: boolean,
+): Promise<any> => {
+    if (response.type === 'opaqueredirect') {
+        config.ON_OPAQUE_REDIRECT?.(response);
+        return undefined;
+    }
+    if (response.status !== 204 && response.status !== 302) {
         try {
             const contentType = response.headers.get('Content-Type');
             if (contentType) {
-                const jsonTypes = ['application/json', 'application/problem+json']
-                const isJSON = jsonTypes.some(type => contentType.toLowerCase().startsWith(type));
-                if (isJSON) {
+                const isJSON = isJsonContentType(contentType);
+                if (isJSON && !isSmartDownload) {
                     return await response.json();
+                } else if (contentType.includes('application/pdf')) {
+                    return await response.blob();
                 } else {
                     return await response.text();
                 }
@@ -8469,6 +8834,102 @@ export const getResponseBody = async (response: Response): Promise<any> => {
         }
     }
     return undefined;
+};
+
+/**
+ * Extracts a filename from an HTTP \`Content-Disposition\` header value.
+ *
+ * Handles these forms, in order of preference:
+ *   1. \`filename*=UTF-8''<percent-encoded>\` — RFC 5987/8187 extended parameter
+ *      (only the UTF-8 charset is recognized; other charsets fall through).
+ *   2. \`filename="..."\` — quoted form (RFC 6266).
+ *   3. \`filename=...\`   — bare token form (RFC 6266).
+ *
+ * Returns \`'download'\` as a last-resort fallback when the header is missing
+ * or none of the patterns match. Non-UTF-8 extended params, multi-line
+ * continuations, and other exotic RFC 6266 edge cases are intentionally not
+ * handled — if that becomes necessary, swap this helper for the npm
+ * \`content-disposition\` package.
+ */
+const getContentDispositionFilename = (contentDisposition: string | null): string => {
+    if (!contentDisposition) return 'download';
+    const utf8Match = contentDisposition.match(/filename\\*=UTF-8''([^;]+)/i);
+    if (utf8Match?.[1]) {
+        try {
+            return decodeURIComponent(utf8Match[1]);
+        } catch {
+            /* fall through */
+        }
+    }
+    const quotedMatch = contentDisposition.match(/filename="([^"]+)"/i);
+    if (quotedMatch?.[1]) {
+        return quotedMatch[1];
+    }
+    const bareMatch = contentDisposition.match(/filename=([^;]+)/i);
+    if (bareMatch?.[1]) {
+        return bareMatch[1].trim();
+    }
+    return 'download';
+};
+
+/**
+ * Triggers a browser "Save file" dialog for the given \`Blob\` under \`filename\`.
+ *
+ * Uses the standard synthetic-anchor pattern: create an \`<a>\` pointing at an
+ * object URL, append it to the DOM (required by some browsers for \`.click()\`
+ * to take effect), click it, then tear it down and revoke the object URL to
+ * release the underlying blob reference.
+ *
+ * Browser-only — relies on \`document\` and \`URL.createObjectURL\`. Not usable in
+ * Node/SSR contexts.
+ */
+const downloadBlob = (blob: Blob, filename: string): void => {
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+};
+
+/**
+ * Picks the MIME type to stamp on the saved \`Blob\`.
+ *
+ * Mirrors the server's \`Content-Type\` in most cases. Maps JSON-ish content
+ * types to \`application/octet-stream\` so the browser doesn't try to preview
+ * the downloaded file as JSON — when we force a download, we want the user
+ * to get a saveable binary, not a pretty-printed browser tab.
+ */
+const getDownloadContentType = (response: Response): string => {
+    const contentType = response.headers.get('content-type');
+    if (isJsonContentType(contentType)) {
+        return 'application/octet-stream';
+    }
+    return contentType || 'application/octet-stream';
+};
+
+/**
+ * Conditionally triggers a browser download for a response body.
+ *
+ * Only acts when the response carries \`Content-Disposition: attachment\` — this
+ * is the server's explicit opt-in signal that the body is a file the user
+ * should save. For any other response (no header, \`inline\` disposition) this
+ * is a silent no-op, so callers can safely invoke it on every \`SMART_DOWNLOAD\`
+ * request without worrying about spurious downloads.
+ *
+ * Filename comes from the \`Content-Disposition\` header (see
+ * \`getContentDispositionFilename\`); the blob is stamped with a download-safe
+ * content type (see \`getDownloadContentType\`) and handed to \`downloadBlob\`.
+ */
+const handleFileDownload = (response: Response, responseBody: any): void => {
+    const contentDisposition = response.headers.get('content-disposition');
+    if (!contentDisposition || !contentDisposition.includes('attachment')) {
+        return;
+    }
+    const filename = getContentDispositionFilename(contentDisposition);
+    const blob = new Blob([responseBody], { type: getDownloadContentType(response) });
+    downloadBlob(blob, filename);
 };
 
 export const catchErrorCodes = (options: ApiRequestOptions, result: ApiResult): void => {
@@ -8515,14 +8976,27 @@ export const catchErrorCodes = (options: ApiRequestOptions, result: ApiResult): 
 export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): CancelablePromise<T> => {
     return new CancelablePromise(async (resolve, reject, onCancel) => {
         try {
+            const cacheProvider = config.CACHE_PROVIDER;
+            const isCacheEnabled = Boolean(config.CACHE_OPTIONS?.enabled && cacheProvider);
+            let cacheKey: string | undefined;
+            if (isCacheEnabled && cacheProvider) {
+                cacheKey = config.CACHE_OPTIONS?.key ?? JSON.stringify(options);
+                const cachedResult = await cacheProvider.getItem(cacheKey);
+                if (cachedResult) {
+                    resolve(JSON.parse(cachedResult));
+                    return;
+                }
+            }
+
             const url = getUrl(config, options);
             const formData = getFormData(options);
             const body = getRequestBody(options);
             const headers = await getHeaders(config, options);
 
             if (!onCancel.isCancelled) {
+                const isSmartDownload = Boolean(config.SMART_DOWNLOAD);
                 const response = await sendRequest(config, options, url, body, formData, headers, onCancel);
-                const responseBody = await getResponseBody(response);
+                const responseBody = await getResponseBody(response, config, isSmartDownload);
                 const responseHeader = getResponseHeader(response, options.responseHeader);
 
                 const result: ApiResult = {
@@ -8534,6 +9008,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
                 };
 
                 catchErrorCodes(options, result);
+
+                if (isCacheEnabled && cacheKey && cacheProvider) {
+                    await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
+                }
+
+                if (isSmartDownload) {
+                    handleFileDownload(response, responseBody);
+                }
 
                 resolve(result.body);
             }
@@ -11274,7 +11756,7 @@ export class CollectionFormatService {
         parameterArrayTsv: Array<string> | null,
         parameterArrayPipes: Array<string> | null,
         parameterArrayMulti: Array<string> | null,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11325,7 +11807,7 @@ export class ComplexService {
             };
         },
         parameterReference: ModelWithString,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<Array<ModelWithString>> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11365,7 +11847,7 @@ export class ComplexService {
                 readonly name?: string | null;
             };
         },
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<ModelWithString> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11399,7 +11881,7 @@ export class DefaultService {
      * @throws ApiError
      */
     public static serviceWithEmptyTag(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11441,7 +11923,7 @@ export class DefaultsService {
         parameterModel: ModelWithString | null = {
             "prop": "Hello World!"
         },
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11475,7 +11957,7 @@ export class DefaultsService {
         parameterModel: ModelWithString = {
             "prop": "Hello World!"
         },
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11513,7 +11995,7 @@ export class DefaultsService {
         parameterStringWithEmptyDefault: string = '',
         parameterStringNullableWithNoDefault?: string | null,
         parameterStringNullableWithDefault: string | null = null,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11556,7 +12038,7 @@ export class DeprecatedService {
      */
     public static deprecatedCall(
         parameter: DeprecatedModel | null,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11603,7 +12085,7 @@ export class DescriptionsService {
         parameterWithExpressionPlaceholders?: any,
         parameterWithQuotes?: any,
         parameterWithReservedCharacters?: any,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11640,7 +12122,7 @@ export class DuplicateService {
      * @throws ApiError
      */
     public static duplicateName(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11655,7 +12137,7 @@ export class DuplicateService {
      * @throws ApiError
      */
     public static duplicateName1(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11670,7 +12152,7 @@ export class DuplicateService {
      * @throws ApiError
      */
     public static duplicateName2(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11685,7 +12167,7 @@ export class DuplicateService {
      * @throws ApiError
      */
     public static duplicateName3(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11717,7 +12199,7 @@ export class ErrorService {
      */
     public static testErrorCode(
         status: number,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<any> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11760,7 +12242,7 @@ export class FormDataService {
     public static postApiFormData(
         parameter?: string,
         formData?: ModelWithString,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11795,7 +12277,7 @@ export class HeaderService {
      * @throws ApiError
      */
     public static callWithResultFromHeader(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<string> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11835,7 +12317,7 @@ export class MultipartService {
             content?: Blob;
             data?: ModelWithString | null;
         },
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11853,7 +12335,7 @@ export class MultipartService {
      * @throws ApiError
      */
     public static multipartResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<{
         file?: Blob;
         metadata?: {
@@ -11889,7 +12371,7 @@ export class MultipleTags1Service {
      * @throws ApiError
      */
     public static dummyA(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11905,7 +12387,7 @@ export class MultipleTags1Service {
      * @throws ApiError
      */
     public static dummyB(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11935,7 +12417,7 @@ export class MultipleTags2Service {
      * @throws ApiError
      */
     public static dummyA(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11951,7 +12433,7 @@ export class MultipleTags2Service {
      * @throws ApiError
      */
     public static dummyB(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -11981,7 +12463,7 @@ export class MultipleTags3Service {
      * @throws ApiError
      */
     public static dummyB(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12011,7 +12493,7 @@ export class NoContentService {
      * @throws ApiError
      */
     public static callWithNoContentResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12054,7 +12536,7 @@ export class ParametersService {
         parameterCookie: string | null,
         parameterPath: string | null,
         requestBody: ModelWithString | null,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12104,7 +12586,7 @@ export class ParametersService {
         parameterPath2?: string,
         parameterPath3?: string,
         _default?: string,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12143,7 +12625,7 @@ export class ParametersService {
     public static getCallWithOptionalParam(
         requestBody: ModelWithString,
         parameter?: string,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12167,7 +12649,7 @@ export class ParametersService {
     public static postCallWithOptionalParam(
         parameter: Pageable,
         requestBody?: ModelWithString,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12206,7 +12688,7 @@ export class RequestBodyService {
     public static postApiRequestBody(
         parameter?: string,
         requestBody?: ModelWithString,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12244,7 +12726,7 @@ export class ResponseService {
      * @throws ApiError
      */
     public static callWithResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<ModelWithString> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12260,7 +12742,7 @@ export class ResponseService {
      * @throws ApiError
      */
     public static callWithDuplicateResponses(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<ModelWithString> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12284,7 +12766,7 @@ export class ResponseService {
      * @throws ApiError
      */
     public static callWithResponses(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<{
         readonly '@namespace.string'?: string;
         readonly '@namespace.integer'?: number;
@@ -12322,7 +12804,7 @@ export class SimpleService {
      * @throws ApiError
      */
     public static getCallWithoutParametersAndResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12337,7 +12819,7 @@ export class SimpleService {
      * @throws ApiError
      */
     public static putCallWithoutParametersAndResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12352,7 +12834,7 @@ export class SimpleService {
      * @throws ApiError
      */
     public static postCallWithoutParametersAndResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12367,7 +12849,7 @@ export class SimpleService {
      * @throws ApiError
      */
     public static deleteCallWithoutParametersAndResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12382,7 +12864,7 @@ export class SimpleService {
      * @throws ApiError
      */
     public static optionsCallWithoutParametersAndResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12397,7 +12879,7 @@ export class SimpleService {
      * @throws ApiError
      */
     public static headCallWithoutParametersAndResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12412,7 +12894,7 @@ export class SimpleService {
      * @throws ApiError
      */
     public static patchCallWithoutParametersAndResponse(
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<void> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12461,7 +12943,7 @@ export class TypesService {
         parameterBoolean: boolean | null = true,
         parameterObject: Record<string, any> | null = null,
         id?: number,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<number | string | boolean | Record<string, any>> {
         return __request(
             {...OpenAPI, ...configOverrides},
@@ -12505,7 +12987,7 @@ export class UploadService {
      */
     public static uploadFile(
         file: Blob,
-        configOverrides?: OpenAPIConfig,
+        configOverrides?: Partial<OpenAPIConfig>,
     ): CancelablePromise<boolean> {
         return __request(
             {...OpenAPI, ...configOverrides},

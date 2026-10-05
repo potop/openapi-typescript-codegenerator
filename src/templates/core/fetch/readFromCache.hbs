@@ -1,0 +1,34 @@
+/**
+ * Reads a cached response, giving up after `config.CACHE_TIMEOUT` milliseconds.
+ *
+ * A provider whose read never settles would otherwise hold the request forever,
+ * with no error and no network call. On timeout the read counts as a miss, so the
+ * request goes to the network, and `ON_CACHE_TIMEOUT` receives the read that is
+ * still outstanding so the consumer can tell when the cache comes back. With no
+ * `CACHE_TIMEOUT` the read is awaited for as long as it takes.
+ *
+ * `timedOut` tells the caller not to write the response back: the provider has just
+ * shown it is not answering, and writes queued against it would all run at once
+ * when it recovers.
+ */
+export const readFromCache = async (config: OpenAPIConfig, cacheProvider: CacheProvider, cacheKey: string): Promise<{ value: string | null | undefined; timedOut: boolean }> => {
+	const pending = cacheProvider.getItem(cacheKey);
+	const timeout = config.CACHE_TIMEOUT;
+	if (timeout === undefined) {
+		return { value: await pending, timedOut: false };
+	}
+
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const deadline = new Promise<{ value: undefined; timedOut: true }>(resolve => {
+		timer = setTimeout(() => {
+			config.ON_CACHE_TIMEOUT?.('getItem', cacheKey, pending);
+			resolve({ value: undefined, timedOut: true });
+		}, timeout);
+	});
+	try {
+		// `race` subscribes to `pending`, so a rejection after the deadline is never unhandled.
+		return await Promise.race([pending.then(value => ({ value, timedOut: false })), deadline]);
+	} finally {
+		clearTimeout(timer);
+	}
+};

@@ -26,6 +26,7 @@ import fetchGetRequestBody from '../templates/core/fetch/getRequestBody.hbs';
 import fetchGetResponseBody from '../templates/core/fetch/getResponseBody.hbs';
 import fetchGetResponseHeader from '../templates/core/fetch/getResponseHeader.hbs';
 import fetchHandleFileDownload from '../templates/core/fetch/handleFileDownload.hbs';
+import fetchReadFromCache from '../templates/core/fetch/readFromCache.hbs';
 import fetchRequest from '../templates/core/fetch/request.hbs';
 import fetchSendRequest from '../templates/core/fetch/sendRequest.hbs';
 import functionBase64 from '../templates/core/functions/base64.hbs';
@@ -195,6 +196,7 @@ export const registerHandlebarTemplates = (root: {
     );
     Handlebars.registerPartial('fetch/downloadBlob', Handlebars.template(fetchDownloadBlob));
     Handlebars.registerPartial('fetch/handleFileDownload', Handlebars.template(fetchHandleFileDownload));
+    Handlebars.registerPartial('fetch/readFromCache', Handlebars.template(fetchReadFromCache));
     Handlebars.registerPartial('fetch/request', Handlebars.template(fetchRequest));
 
     // Specific files for the xhr client implementation

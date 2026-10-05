@@ -5,7 +5,7 @@ import type { ApiRequestOptions } from './ApiRequestOptions';
 import type { ApiResult } from './ApiResult';
 import { CancelablePromise } from './CancelablePromise';
 import type { OnCancel } from './CancelablePromise';
-import type { OpenAPIConfig } from './OpenAPI';
+import type { CacheProvider, OpenAPIConfig } from './OpenAPI';
 
 {{>functions/isDefined}}
 
@@ -61,6 +61,9 @@ import type { OpenAPIConfig } from './OpenAPI';
 {{>fetch/handleFileDownload}}
 
 
+{{>fetch/readFromCache}}
+
+
 {{>functions/catchErrorCodes}}
 
 
@@ -77,12 +80,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
 			const cacheProvider = config.CACHE_PROVIDER;
 			const isCacheEnabled = Boolean(config.CACHE_OPTIONS?.enabled && cacheProvider);
 			let cacheKey: string | undefined;
+			let cacheReadTimedOut = false;
 			if (isCacheEnabled && cacheProvider) {
 				cacheKey = config.CACHE_OPTIONS?.key ?? JSON.stringify(options);
 				try {
-					const cachedResult = await cacheProvider.getItem(cacheKey);
-					if (cachedResult) {
-						resolve(JSON.parse(cachedResult));
+					const cached = await readFromCache(config, cacheProvider, cacheKey);
+					cacheReadTimedOut = cached.timedOut;
+					if (cached.value) {
+						resolve(JSON.parse(cached.value));
 						return;
 					}
 				} catch (cacheReadError) {
@@ -111,12 +116,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
 
 				catchErrorCodes(options, result);
 
-				if (isCacheEnabled && cacheKey && cacheProvider) {
-					try {
-						await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
-					} catch (cacheWriteError) {
-						config.ON_CACHE_ERROR?.('setItem', cacheWriteError, cacheKey);
-					}
+				if (isCacheEnabled && cacheKey && cacheProvider && !cacheReadTimedOut) {
+					// Not awaited: a response never waits on its own cache write, so a provider
+					// that stops settling cannot hold the request after its fetch has completed.
+					// The body is serialized now, in the executor, before the caller can mutate it.
+					const writeKey = cacheKey;
+					void new Promise<string>(serialize => serialize(JSON.stringify(result.body)))
+						.then(serialized => cacheProvider.setItem(writeKey, serialized))
+						.catch(cacheWriteError => config.ON_CACHE_ERROR?.('setItem', cacheWriteError, writeKey));
 				}
 
 				if (isSmartDownload) {

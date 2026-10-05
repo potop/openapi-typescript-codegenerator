@@ -34,6 +34,8 @@ export type OpenAPIConfig = {
 	CACHE_OPTIONS?: ApiCacheOptions | undefined;
 	CACHE_PROVIDER?: CacheProvider | undefined;
 	ON_CACHE_ERROR?: ((operation: CacheErrorOperation, error: unknown, cacheKey: string) => void) | undefined;
+	CACHE_TIMEOUT?: number | undefined;
+	ON_CACHE_TIMEOUT?: ((operation: CacheErrorOperation, cacheKey: string, pending: Promise<unknown>) => void) | undefined;
 	SMART_DOWNLOAD?: boolean | undefined;
 	REDIRECT?: RequestRedirect | undefined;
 	ON_OPAQUE_REDIRECT?: ((response: Response) => void) | undefined;
@@ -52,6 +54,8 @@ export const OpenAPI: OpenAPIConfig = {
 	CACHE_OPTIONS: undefined,
 	CACHE_PROVIDER: undefined,
 	ON_CACHE_ERROR: undefined,
+	CACHE_TIMEOUT: undefined,
+	ON_CACHE_TIMEOUT: undefined,
 	SMART_DOWNLOAD: false,
 	REDIRECT: undefined,
 	ON_OPAQUE_REDIRECT: undefined,

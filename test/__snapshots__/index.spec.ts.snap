@@ -389,6 +389,8 @@ export type OpenAPIConfig = {
     CACHE_OPTIONS?: ApiCacheOptions | undefined;
     CACHE_PROVIDER?: CacheProvider | undefined;
     ON_CACHE_ERROR?: ((operation: CacheErrorOperation, error: unknown, cacheKey: string) => void) | undefined;
+    CACHE_TIMEOUT?: number | undefined;
+    ON_CACHE_TIMEOUT?: ((operation: CacheErrorOperation, cacheKey: string, pending: Promise<unknown>) => void) | undefined;
     SMART_DOWNLOAD?: boolean | undefined;
     REDIRECT?: RequestRedirect | undefined;
     ON_OPAQUE_REDIRECT?: ((response: Response) => void) | undefined;
@@ -407,6 +409,8 @@ export const OpenAPI: OpenAPIConfig = {
     CACHE_OPTIONS: undefined,
     CACHE_PROVIDER: undefined,
     ON_CACHE_ERROR: undefined,
+    CACHE_TIMEOUT: undefined,
+    ON_CACHE_TIMEOUT: undefined,
     SMART_DOWNLOAD: false,
     REDIRECT: undefined,
     ON_OPAQUE_REDIRECT: undefined,
@@ -424,7 +428,7 @@ import type { ApiRequestOptions } from './ApiRequestOptions';
 import type { ApiResult } from './ApiResult';
 import { CancelablePromise } from './CancelablePromise';
 import type { OnCancel } from './CancelablePromise';
-import type { OpenAPIConfig } from './OpenAPI';
+import type { CacheProvider, OpenAPIConfig } from './OpenAPI';
 
 export const isDefined = <T>(value: T | null | undefined): value is Exclude<T, null | undefined> => {
     return value !== undefined && value !== null;
@@ -781,6 +785,41 @@ const handleFileDownload = (response: Response, responseBody: any): void => {
     downloadBlob(blob, filename);
 };
 
+/**
+ * Reads a cached response, giving up after \`config.CACHE_TIMEOUT\` milliseconds.
+ *
+ * A provider whose read never settles would otherwise hold the request forever,
+ * with no error and no network call. On timeout the read counts as a miss, so the
+ * request goes to the network, and \`ON_CACHE_TIMEOUT\` receives the read that is
+ * still outstanding so the consumer can tell when the cache comes back. With no
+ * \`CACHE_TIMEOUT\` the read is awaited for as long as it takes.
+ *
+ * \`timedOut\` tells the caller not to write the response back: the provider has just
+ * shown it is not answering, and writes queued against it would all run at once
+ * when it recovers.
+ */
+export const readFromCache = async (config: OpenAPIConfig, cacheProvider: CacheProvider, cacheKey: string): Promise<{ value: string | null | undefined; timedOut: boolean }> => {
+    const pending = cacheProvider.getItem(cacheKey);
+    const timeout = config.CACHE_TIMEOUT;
+    if (timeout === undefined) {
+        return { value: await pending, timedOut: false };
+    }
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<{ value: undefined; timedOut: true }>(resolve => {
+        timer = setTimeout(() => {
+            config.ON_CACHE_TIMEOUT?.('getItem', cacheKey, pending);
+            resolve({ value: undefined, timedOut: true });
+        }, timeout);
+    });
+    try {
+        // \`race\` subscribes to \`pending\`, so a rejection after the deadline is never unhandled.
+        return await Promise.race([pending.then(value => ({ value, timedOut: false })), deadline]);
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
 export const catchErrorCodes = (options: ApiRequestOptions, result: ApiResult): void => {
     const errors: Record<number, string> = {
         400: 'Bad Request',
@@ -828,12 +867,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
             const cacheProvider = config.CACHE_PROVIDER;
             const isCacheEnabled = Boolean(config.CACHE_OPTIONS?.enabled && cacheProvider);
             let cacheKey: string | undefined;
+            let cacheReadTimedOut = false;
             if (isCacheEnabled && cacheProvider) {
                 cacheKey = config.CACHE_OPTIONS?.key ?? JSON.stringify(options);
                 try {
-                    const cachedResult = await cacheProvider.getItem(cacheKey);
-                    if (cachedResult) {
-                        resolve(JSON.parse(cachedResult));
+                    const cached = await readFromCache(config, cacheProvider, cacheKey);
+                    cacheReadTimedOut = cached.timedOut;
+                    if (cached.value) {
+                        resolve(JSON.parse(cached.value));
                         return;
                     }
                 } catch (cacheReadError) {
@@ -862,12 +903,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
 
                 catchErrorCodes(options, result);
 
-                if (isCacheEnabled && cacheKey && cacheProvider) {
-                    try {
-                        await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
-                    } catch (cacheWriteError) {
-                        config.ON_CACHE_ERROR?.('setItem', cacheWriteError, cacheKey);
-                    }
+                if (isCacheEnabled && cacheKey && cacheProvider && !cacheReadTimedOut) {
+                    // Not awaited: a response never waits on its own cache write, so a provider
+                    // that stops settling cannot hold the request after its fetch has completed.
+                    // The body is serialized now, in the executor, before the caller can mutate it.
+                    const writeKey = cacheKey;
+                    void new Promise<string>(serialize => serialize(JSON.stringify(result.body)))
+                        .then(serialized => cacheProvider.setItem(writeKey, serialized))
+                        .catch(cacheWriteError => config.ON_CACHE_ERROR?.('setItem', cacheWriteError, writeKey));
                 }
 
                 if (isSmartDownload) {
@@ -5103,6 +5146,8 @@ export type OpenAPIConfig = {
     CACHE_OPTIONS?: ApiCacheOptions | undefined;
     CACHE_PROVIDER?: CacheProvider | undefined;
     ON_CACHE_ERROR?: ((operation: CacheErrorOperation, error: unknown, cacheKey: string) => void) | undefined;
+    CACHE_TIMEOUT?: number | undefined;
+    ON_CACHE_TIMEOUT?: ((operation: CacheErrorOperation, cacheKey: string, pending: Promise<unknown>) => void) | undefined;
     SMART_DOWNLOAD?: boolean | undefined;
     REDIRECT?: RequestRedirect | undefined;
     ON_OPAQUE_REDIRECT?: ((response: Response) => void) | undefined;
@@ -5121,6 +5166,8 @@ export const OpenAPI: OpenAPIConfig = {
     CACHE_OPTIONS: undefined,
     CACHE_PROVIDER: undefined,
     ON_CACHE_ERROR: undefined,
+    CACHE_TIMEOUT: undefined,
+    ON_CACHE_TIMEOUT: undefined,
     SMART_DOWNLOAD: false,
     REDIRECT: undefined,
     ON_OPAQUE_REDIRECT: undefined,
@@ -5138,7 +5185,7 @@ import type { ApiRequestOptions } from './ApiRequestOptions';
 import type { ApiResult } from './ApiResult';
 import { CancelablePromise } from './CancelablePromise';
 import type { OnCancel } from './CancelablePromise';
-import type { OpenAPIConfig } from './OpenAPI';
+import type { CacheProvider, OpenAPIConfig } from './OpenAPI';
 
 export const isDefined = <T>(value: T | null | undefined): value is Exclude<T, null | undefined> => {
     return value !== undefined && value !== null;
@@ -5495,6 +5542,41 @@ const handleFileDownload = (response: Response, responseBody: any): void => {
     downloadBlob(blob, filename);
 };
 
+/**
+ * Reads a cached response, giving up after \`config.CACHE_TIMEOUT\` milliseconds.
+ *
+ * A provider whose read never settles would otherwise hold the request forever,
+ * with no error and no network call. On timeout the read counts as a miss, so the
+ * request goes to the network, and \`ON_CACHE_TIMEOUT\` receives the read that is
+ * still outstanding so the consumer can tell when the cache comes back. With no
+ * \`CACHE_TIMEOUT\` the read is awaited for as long as it takes.
+ *
+ * \`timedOut\` tells the caller not to write the response back: the provider has just
+ * shown it is not answering, and writes queued against it would all run at once
+ * when it recovers.
+ */
+export const readFromCache = async (config: OpenAPIConfig, cacheProvider: CacheProvider, cacheKey: string): Promise<{ value: string | null | undefined; timedOut: boolean }> => {
+    const pending = cacheProvider.getItem(cacheKey);
+    const timeout = config.CACHE_TIMEOUT;
+    if (timeout === undefined) {
+        return { value: await pending, timedOut: false };
+    }
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<{ value: undefined; timedOut: true }>(resolve => {
+        timer = setTimeout(() => {
+            config.ON_CACHE_TIMEOUT?.('getItem', cacheKey, pending);
+            resolve({ value: undefined, timedOut: true });
+        }, timeout);
+    });
+    try {
+        // \`race\` subscribes to \`pending\`, so a rejection after the deadline is never unhandled.
+        return await Promise.race([pending.then(value => ({ value, timedOut: false })), deadline]);
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
 export const catchErrorCodes = (options: ApiRequestOptions, result: ApiResult): void => {
     const errors: Record<number, string> = {
         400: 'Bad Request',
@@ -5542,12 +5624,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
             const cacheProvider = config.CACHE_PROVIDER;
             const isCacheEnabled = Boolean(config.CACHE_OPTIONS?.enabled && cacheProvider);
             let cacheKey: string | undefined;
+            let cacheReadTimedOut = false;
             if (isCacheEnabled && cacheProvider) {
                 cacheKey = config.CACHE_OPTIONS?.key ?? JSON.stringify(options);
                 try {
-                    const cachedResult = await cacheProvider.getItem(cacheKey);
-                    if (cachedResult) {
-                        resolve(JSON.parse(cachedResult));
+                    const cached = await readFromCache(config, cacheProvider, cacheKey);
+                    cacheReadTimedOut = cached.timedOut;
+                    if (cached.value) {
+                        resolve(JSON.parse(cached.value));
                         return;
                     }
                 } catch (cacheReadError) {
@@ -5576,12 +5660,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
 
                 catchErrorCodes(options, result);
 
-                if (isCacheEnabled && cacheKey && cacheProvider) {
-                    try {
-                        await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
-                    } catch (cacheWriteError) {
-                        config.ON_CACHE_ERROR?.('setItem', cacheWriteError, cacheKey);
-                    }
+                if (isCacheEnabled && cacheKey && cacheProvider && !cacheReadTimedOut) {
+                    // Not awaited: a response never waits on its own cache write, so a provider
+                    // that stops settling cannot hold the request after its fetch has completed.
+                    // The body is serialized now, in the executor, before the caller can mutate it.
+                    const writeKey = cacheKey;
+                    void new Promise<string>(serialize => serialize(JSON.stringify(result.body)))
+                        .then(serialized => cacheProvider.setItem(writeKey, serialized))
+                        .catch(cacheWriteError => config.ON_CACHE_ERROR?.('setItem', cacheWriteError, writeKey));
                 }
 
                 if (isSmartDownload) {
@@ -8568,6 +8654,8 @@ export type OpenAPIConfig = {
     CACHE_OPTIONS?: ApiCacheOptions | undefined;
     CACHE_PROVIDER?: CacheProvider | undefined;
     ON_CACHE_ERROR?: ((operation: CacheErrorOperation, error: unknown, cacheKey: string) => void) | undefined;
+    CACHE_TIMEOUT?: number | undefined;
+    ON_CACHE_TIMEOUT?: ((operation: CacheErrorOperation, cacheKey: string, pending: Promise<unknown>) => void) | undefined;
     SMART_DOWNLOAD?: boolean | undefined;
     REDIRECT?: RequestRedirect | undefined;
     ON_OPAQUE_REDIRECT?: ((response: Response) => void) | undefined;
@@ -8586,6 +8674,8 @@ export const OpenAPI: OpenAPIConfig = {
     CACHE_OPTIONS: undefined,
     CACHE_PROVIDER: undefined,
     ON_CACHE_ERROR: undefined,
+    CACHE_TIMEOUT: undefined,
+    ON_CACHE_TIMEOUT: undefined,
     SMART_DOWNLOAD: false,
     REDIRECT: undefined,
     ON_OPAQUE_REDIRECT: undefined,
@@ -8603,7 +8693,7 @@ import type { ApiRequestOptions } from './ApiRequestOptions';
 import type { ApiResult } from './ApiResult';
 import { CancelablePromise } from './CancelablePromise';
 import type { OnCancel } from './CancelablePromise';
-import type { OpenAPIConfig } from './OpenAPI';
+import type { CacheProvider, OpenAPIConfig } from './OpenAPI';
 
 export const isDefined = <T>(value: T | null | undefined): value is Exclude<T, null | undefined> => {
     return value !== undefined && value !== null;
@@ -8960,6 +9050,41 @@ const handleFileDownload = (response: Response, responseBody: any): void => {
     downloadBlob(blob, filename);
 };
 
+/**
+ * Reads a cached response, giving up after \`config.CACHE_TIMEOUT\` milliseconds.
+ *
+ * A provider whose read never settles would otherwise hold the request forever,
+ * with no error and no network call. On timeout the read counts as a miss, so the
+ * request goes to the network, and \`ON_CACHE_TIMEOUT\` receives the read that is
+ * still outstanding so the consumer can tell when the cache comes back. With no
+ * \`CACHE_TIMEOUT\` the read is awaited for as long as it takes.
+ *
+ * \`timedOut\` tells the caller not to write the response back: the provider has just
+ * shown it is not answering, and writes queued against it would all run at once
+ * when it recovers.
+ */
+export const readFromCache = async (config: OpenAPIConfig, cacheProvider: CacheProvider, cacheKey: string): Promise<{ value: string | null | undefined; timedOut: boolean }> => {
+    const pending = cacheProvider.getItem(cacheKey);
+    const timeout = config.CACHE_TIMEOUT;
+    if (timeout === undefined) {
+        return { value: await pending, timedOut: false };
+    }
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<{ value: undefined; timedOut: true }>(resolve => {
+        timer = setTimeout(() => {
+            config.ON_CACHE_TIMEOUT?.('getItem', cacheKey, pending);
+            resolve({ value: undefined, timedOut: true });
+        }, timeout);
+    });
+    try {
+        // \`race\` subscribes to \`pending\`, so a rejection after the deadline is never unhandled.
+        return await Promise.race([pending.then(value => ({ value, timedOut: false })), deadline]);
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
 export const catchErrorCodes = (options: ApiRequestOptions, result: ApiResult): void => {
     const errors: Record<number, string> = {
         400: 'Bad Request',
@@ -9007,12 +9132,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
             const cacheProvider = config.CACHE_PROVIDER;
             const isCacheEnabled = Boolean(config.CACHE_OPTIONS?.enabled && cacheProvider);
             let cacheKey: string | undefined;
+            let cacheReadTimedOut = false;
             if (isCacheEnabled && cacheProvider) {
                 cacheKey = config.CACHE_OPTIONS?.key ?? JSON.stringify(options);
                 try {
-                    const cachedResult = await cacheProvider.getItem(cacheKey);
-                    if (cachedResult) {
-                        resolve(JSON.parse(cachedResult));
+                    const cached = await readFromCache(config, cacheProvider, cacheKey);
+                    cacheReadTimedOut = cached.timedOut;
+                    if (cached.value) {
+                        resolve(JSON.parse(cached.value));
                         return;
                     }
                 } catch (cacheReadError) {
@@ -9041,12 +9168,14 @@ export const request = <T>(config: OpenAPIConfig, options: ApiRequestOptions): C
 
                 catchErrorCodes(options, result);
 
-                if (isCacheEnabled && cacheKey && cacheProvider) {
-                    try {
-                        await cacheProvider.setItem(cacheKey, JSON.stringify(result.body));
-                    } catch (cacheWriteError) {
-                        config.ON_CACHE_ERROR?.('setItem', cacheWriteError, cacheKey);
-                    }
+                if (isCacheEnabled && cacheKey && cacheProvider && !cacheReadTimedOut) {
+                    // Not awaited: a response never waits on its own cache write, so a provider
+                    // that stops settling cannot hold the request after its fetch has completed.
+                    // The body is serialized now, in the executor, before the caller can mutate it.
+                    const writeKey = cacheKey;
+                    void new Promise<string>(serialize => serialize(JSON.stringify(result.body)))
+                        .then(serialized => cacheProvider.setItem(writeKey, serialized))
+                        .catch(cacheWriteError => config.ON_CACHE_ERROR?.('setItem', cacheWriteError, writeKey));
                 }
 
                 if (isSmartDownload) {
